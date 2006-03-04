@@ -136,6 +136,10 @@ def eachTrx(lines, result):
     >>> r=[]; d=iter(_TestData); dummy=readHeader(d); \
     t=eachTrx(d, r); len(list(t))
     11
+
+    >>> r=[]; d=iter(_TestData); dummy=readHeader(d); \
+    t=eachTrx(d, r); t.next()
+    (['1/7/94', 'Texans Checks', '1237', 'Albertsons', '', 'Home', 'R', '-17.70'], [])
     """
 
     trx = None
