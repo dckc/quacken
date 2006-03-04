@@ -187,14 +187,12 @@ class TrxSink:
         xwr.characters(trx[1])
         xwr.endElement()
 
-        num = trx[2]
-        if num.endswith(' S'):
-            # ah... this just means split transaction. redundant.
-            num=num[:-1].strip()
+        num, splitmark, trxty = numField(trx[2])
+        if splitmark:
             xwr.startElement(Quacken.NumS, {})
             xwr.characters('S')
             xwr.endElement()
-        if num in ('ATM', 'DEP', 'Deposit', 'EFT', 'TXFR'):
+        if trxty:
             xwr.startElement(Quacken.NumT, {})
             xwr.characters(num)
             xwr.endElement()
@@ -255,6 +253,20 @@ class TrxSink:
         xwr = self._wr
         xwr.endElement() # close r:RDF
 
+def numField(num):
+    if num.endswith(' S'):
+	# ah... this just means split transaction. redundant.
+	num=num[:-1].strip()
+	split = 'S'
+    else:
+	split = None
+
+    if num in ('ATM', 'DEP', 'Deposit', 'EFT', 'TXFR'):
+	trxty = num
+	num = None
+    else:
+	trxty = None
+    return (num, split, trxty)
 
 class TrxDocSink:
     """Write transactions as XHTML using microformats
@@ -306,8 +318,10 @@ tbody.vevent td { padding: 3px; margin: 0}
 	w("<tbody class='vevent'>\n")
 	w(" <tr class='trx'><td><abbr class='dtstart %s' title='%s'>%s</abbr>"
 	  "</td>\n" % (parity(datei), datei, date))
+
+	num, splitflag, trxty = numField(num)
 	w("<td>%s</td> <td>%s</td> <td>%s</td></tr>\n" %
-	  (xmldata(desc), num, acct))
+	  (xmldata(desc), num or trxty or '', acct))
         splits.insert(0, ['', '', '', ''] + trx[-4:])
         for d1, d2, d3, d4, memo, category, clr, a in splits:
 	    w("<tr class='split'><td></td><td>%s</td><td>%s</td>"
