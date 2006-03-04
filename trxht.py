@@ -1,3 +1,4 @@
+#!/usr/bin/python # http://www.python.org/
 """
 trxht -- format personal finance transactions as hCalendar
 
@@ -18,18 +19,25 @@ Future Work
   - pick out phone numbers, city/state names
   - support a form of payee smushing on label
  - make URIs for accounts, categories, classses
+ - support round-trip with QIF; sync back up with RDF export work in grokTrx.py
+ - move the quacken project to mercurial
+  - proxy via dig.csail.mit.edu or w3.org? both?
+  - run hg serve on homer? swada? login.csail?
+  - publish hg log stuff in a _scm/ subpath; serve the current version
+    at the top
 
 Colophon
 --------
 
-This document is (supposed to be) written in ReStructuredText_ (I
-haven't tested it@@). The examples in the docstrings below are
-executable doctest_ unit tests.  Check them a la::
+This document is (supposed to be*) written in ReStructuredText_. The
+examples in the docstrings below are executable doctest_ unit tests.
+Check them a la::
 
   $ python trxht.py --test
 
 .. _ReStructuredText: http://docutils.sourceforge.net/docs/user/rst/quickstart.html
 .. _doctest: http://www.python.org/doc/lib/module-doctest.html
+.. *: I haven't tested it. How do footnotes work in rst again?
 
 """
 
