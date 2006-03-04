@@ -236,6 +236,12 @@ def readFooter(lines, ln):
 class ClassFilter:
     """Make a filter function from a class name.
 
+    We're simulating::
+
+      describe ?TRX where { ... ?TRX qt:split [ qs:class "9912mit-misc"] }.
+
+   where the ... is another filter, given by the f param.
+
     >>> f=ClassFilter('9912mit-misc'); trx=(['1/7/94', 'Texans Checks', '1237', 'Albertsons'], [['', '', '', '', '', 'Home', 'R', '-17.70']]); f(trx)
     False
 
@@ -243,15 +249,41 @@ class ClassFilter:
     True
 
     """
-    def __init__(self, cls):
+    def __init__(self, cls, f=None):
 	self._c = cls
+	self._f = f
 
     def __call__(self, trx):
-	c = self._c
-	for split in trx[1]:
-	    catcls = split[5]
-	    if '/' in catcls and catcls.split('/')[1] == c:
-		return True
+	if (self._f is None or self._f(trx)):
+	    c = self._c
+	    for split in trx[1]:
+		catcls = split[5]
+		if '/' in catcls and catcls.split('/')[1] == c:
+		    return True
+	return False
+
+
+class AccountFilter:
+    """Make a filter function from an account name.
+
+    We're simulating::
+
+      describe ?TRX where { ?TRX qt:account "ABC" }.
+
+    >>> f=AccountFilter('Texans Checks'); trx=(['1/7/94', 'Texans Checks', '1237', 'Albertsons'], [['', '', '', '', '', 'Home', 'R', '-17.70']]); f(trx)
+    True
+
+    >>> f=AccountFilter('Texans Checks'); trx=(['1/3/00', 'Citi Visa HI', '', '3Com/Palm Computing 888-956-7256'], [['', '', '', '', '@@reciept?Palm IIIx replacement (phone order 3 Jan)', '[MIT 97]/9912mit-misc', 'R', '-100.00']]); f(trx)
+    False
+
+    """
+    def __init__(self, acct, f=None):
+	self._acct = acct
+	self._f = f
+
+    def __call__(self, trx):
+	if (self._f is None or self._f(trx)):
+	    return self._acct == trx[0][1]
 	return False
 
 def isoDate(dt):

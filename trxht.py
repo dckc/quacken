@@ -50,19 +50,31 @@ Check them a la::
 
 """
 
+import getopt
 from xml.sax.saxutils import escape as xmldata
 
-from trxtsv import eachFile, isoDate, numField, ClassFilter
+import trxtsv
+from trxtsv import isoDate, numField
 
 def main(argv):
-    filter = None
 
+    opts, args = getopt.getopt(argv[1:],
+			       "a:",
+			       ["account=",
+				"class=",
+				])
     sink = TrxDocSink(sys.stdout.write)
-    if len(argv) > 2 and argv[1] == '--class':
-	sink.splitClass = c = argv[2]
-	filter = ClassFilter(c)
-	del argv[1:3]
-    eachFile(argv[1:], sink, filter)
+    filter = None
+    for o, a in opts:
+        if o in ("-a", "--account"):
+	    sink.account = a
+	    filter = trxtsv.AccountFilter(a, filter)
+	elif o in ("--class",):
+	    sink.splitClass = a
+	    filter = trxtsv.ClassFilter(a, filter)
+	    
+    trxtsv.eachFile(args, sink, filter)
+
 
 class TrxDocSink:
     """Write transactions as XHTML using microformats
@@ -149,5 +161,15 @@ def _test():
 
 if __name__ == '__main__':
     import sys
-    if sys.argv[1:] and sys.argv[1] == '--test': _test()
-    else: main(sys.argv)
+
+    if sys.argv[1:] and sys.argv[1] == '--test':
+	_test()
+    else:
+	try:
+	    main(sys.argv)
+	except getopt.GetoptError:
+	    print __doc__
+	    sys.exit(2)
+
+
+
