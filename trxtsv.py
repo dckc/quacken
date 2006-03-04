@@ -91,14 +91,20 @@ Date	Account	Num	Description	Memo	Category	Clr	Amount
 """
 _TestLines = TestString.split("\n")
 
-def eachFile(files, sink):
-    """Iterate over transactions in the files and send them to the sink.
+def eachFile(files, sink, filter=None):
+    """Iterate over selected transactions in the files and send them to
+    the sink.
 
     @param files: a list of files containing reports as above
-    @param sink: something with a transaction() method.
+
+    @param sink: something with header(), transaction(), and close() methods.
+
+    @param filter: a function from (trxdata, splits) to t/f
 
     The transaction method gets called a la: sink.transaction(trxdata, splits).
     See eachTrx() for the structure of trxdata and splits.
+
+    @@TODO: document header() method.
     """
     sink.startDoc()
     
@@ -117,7 +123,8 @@ def eachFile(files, sink):
         sink.header(fieldNames, fn, dt, bal)
 	r = []
 	for trx in eachTrx(lines, r):
-	    sink.transaction(trx[0], trx[1])
+	    if filter is None or filter(trx):
+		sink.transaction(trx[0], trx[1])
         ln = r[0]
         foot = readFooter(lines, ln)
         progress("footer: ", fn, foot)
@@ -150,15 +157,24 @@ def readHeader(lines):
 
 
 def eachTrx(lines, result):
-    """Turn an iterator over lines into an interator over transactions
+    r"""Turn an iterator over lines into an interator over transactions.
 
-    >>> r=[]; d=iter(_TestLines); dummy=readHeader(d); \
-    t=eachTrx(d, r); len(list(t))
+    >>> d=iter(_TestLines); dummy=readHeader(d); t=eachTrx(d, []); len(list(t))
     11
 
-    >>> r=[]; d=iter(_TestLines); dummy=readHeader(d); \
-    t=eachTrx(d, r); t.next()
+    A transaction is a pair where the 1st item is a list
+    of transaction fields [date, account, num, description]
+    and the second is a list of splits. Each split
+    has 4 blank fileds (for historical reasons) followed
+    by memo, category/class, clear, and amount.
+
+    See isoDate(), num(), and amt() for some of the string formats.
+
+    >>> d=iter(_TestLines); dummy=readHeader(d); t=eachTrx(d, []); t.next()
     (['1/7/94', 'Texans Checks', '1237', 'Albertsons'], [['', '', '', '', '', 'Home', 'R', '-17.70']])
+
+    >>> d=iter(_TestLines); dummy=readHeader(d); t=eachTrx(d, []); list(t)[8]
+    (['1/3/00', 'Citi Visa HI', '', '3Com/Palm Computing 888-956-7256'], [['', '', '', '', '@@reciept?Palm IIIx replacement (phone order 3 Jan)', '[MIT 97]/9912mit-misc', 'R', '-100.00']])
     """
 
     trx = None
@@ -216,7 +232,28 @@ def readFooter(lines, ln):
         
     return total, balance, inflows, outflows, nettot
 
-    
+
+class ClassFilter:
+    """Make a filter function from a class name.
+
+    >>> f=ClassFilter('9912mit-misc'); trx=(['1/7/94', 'Texans Checks', '1237', 'Albertsons'], [['', '', '', '', '', 'Home', 'R', '-17.70']]); f(trx)
+    False
+
+    >>> f=ClassFilter('9912mit-misc'); trx=(['1/3/00', 'Citi Visa HI', '', '3Com/Palm Computing 888-956-7256'], [['', '', '', '', '@@reciept?Palm IIIx replacement (phone order 3 Jan)', '[MIT 97]/9912mit-misc', 'R', '-100.00']]); f(trx)
+    True
+
+    """
+    def __init__(self, cls):
+	self._c = cls
+
+    def __call__(self, trx):
+	c = self._c
+	for split in trx[1]:
+	    catcls = split[5]
+	    if '/' in catcls and catcls.split('/')[1] == c:
+		return True
+	return False
+
 def isoDate(dt):
     """convert quicken date format to XML date format
     assume date between 1950 and 2050
