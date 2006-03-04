@@ -57,10 +57,11 @@ from trxtsv import eachFile, isoDate, numField, ClassFilter
 def main(argv):
     filter = None
 
-    if len(argv) > 2 and argv[1] == '--class':
-	filter = ClassFilter(argv[2])
-	del argv[1:3]
     sink = TrxDocSink(sys.stdout.write)
+    if len(argv) > 2 and argv[1] == '--class':
+	sink.splitClass = c = argv[2]
+	filter = ClassFilter(c)
+	del argv[1:3]
     eachFile(argv[1:], sink, filter)
 
 class TrxDocSink:
@@ -71,6 +72,7 @@ class TrxDocSink:
 	"""@param : a writer function, such as f.write
 	"""
 	self._w = w
+	self.splitClass = None
 
     def startDoc(self):
 	w = self._w
@@ -95,7 +97,9 @@ tbody.vevent td { padding: 3px; margin: 0}
     def header(self, fn, fieldNames, dt, bal):
 	w = self._w
 	w(" <h1>Transactions</h1>\n")
-	w(" <p>starting date: %s bal: %s</p>" % (dt, bal))
+	if self.splitClass:
+	    w("<div>Limited to class: %s</div>" % self.splitClass)
+	w(" <p>Input file starting date: %s bal: %s</p>" % (dt, bal))
 	w(" <table>\n")
 	self._row = 0 # don't let tables grow without bound
 
