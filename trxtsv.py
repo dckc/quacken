@@ -37,10 +37,48 @@ Future Work
 -----------
 
   - support some SPARQL: date range, text matching
+   - the sink.transaction method is like a SPARQL describe hit
+    - how about a python datastructure to mirror turtle?
+     - how does that relate to JSON?
+      - and how does JSON relate to python pickles?
   - investigate diff/patch, sync with mysql DB; flag ambiguous transactions
+  - QA
+   - get back to pychecker happiness
+   - check rst out, add Colophon
 
 """
 
+_TestData = """							
+Date	Account	Num	Description	Memo	Category	Clr	Amount
+							
+			BALANCE 12/31/99				1000.00
+							
+1/7/94	Texans Checks	1237	Albertsons		Home	R	-17.70
+1/7/94	Texans Checks	ATM         S	N/A		Loss	R	-1.00
+					Home	R	-31.01
+				haircut	Stuff:Personal	R	-10.00
+					Fun:Cash	R	-8.99
+1/7/94	VISA 4339		Dallas	w/Susan	Fun:Entertainment	R	-25.75
+1/9/94	Discover HI		Exxon	14.838gal	Auto:Fuel	R	-16.75
+1/1/00	Texans Checks		Interest Earned		Interest	R	4.20
+1/1/00	Discover HI		Pizza Hut		Fun:Dining	R	-22.58
+1/2/00	Texans Checks	4196	Northwest Fellowship		Charity	R	-125.00
+1/3/00	Texans Checks	EFT	Nationwide	prepared DEC 08	Auto:Insurance	R	-66.09
+1/3/00	Citi Visa HI		3Com/Palm Computing 888-956-7256	@@reciept?Palm IIIx replacement (phone order 3 Jan)	[MIT 97]/9912mit-misc	R	-100.00
+1/3/00	Discover HI		ALBERTSON'S #40 391401 AUSTIN TX		Home	R	-14.46
+1/3/00	MIT 97		3Com/Palm Computing 888-956-7256	Palm IIIx replacement (phone order 3 Jan)	[Citi Visa HI]/9912mit-misc		100.00
+							
+			TOTAL 1/1/90 - 12/31/96				51,488.91
+							
+			BALANCE 12/31/96				51,488.91
+							
+							
+			TOTAL INFLOWS				728,052.11
+			TOTAL OUTFLOWS				-676,563.20
+							
+			NET TOTAL				51,488.91
+
+""".split("\n")
 
 def eachFile(files, sink):
     sink.startDoc()
@@ -49,70 +87,85 @@ def eachFile(files, sink):
     rdate = None
     
     for fn in files:
-        fp = open(fn)
+        lines = file(fn)
 
-        fieldNames, dt, bal = readHeader(fp)
+        fieldNames, dt, bal = readHeader(lines)
         progress("header:" , fn, fieldNames, dt, bal)
         if rdate and dt <> rdate:
             raise IOError, "expected date " + rdate + " but got " + dt
         if rtot and bal <> rtot:
             raise IOError, "expected balance " + rtot + " but got " + bal
         sink.header(fieldNames, fn, dt, bal)
-        ln = grokTransactions(fp, sink)
-        foot = readFooter(fp, ln)
+	r = []
+	for trx in eachTrx(lines, r):
+	    sink.transaction(trx[0], trx[1])
+        ln = r[0]
+        foot = readFooter(lines, ln)
         progress("footer: ", fn, foot)
         dummy, (rdate, rtot), dummy, dummy, dummy = foot
     
     sink.close()
 
-def readHeader(fp):
+def readHeader(lines):
+    """
+    >>> readHeader(iter(_TestData))
+    (['Date', 'Account', 'Num', 'Description', 'Memo', 'Category', 'Clr', 'Amount'], '1999-12-31', '1000.00')
+    """
     while 1:
         # skip blank line at top
-        hd = fp.readline().strip()
+        hd = lines.next().strip()
         if hd: break
     fieldNames = hd.split('\t')
 
     while 1:
-        bal = fp.readline().strip()
+        bal = lines.next().strip()
         if bal: break
     dummy, dt, a = bal.split()
     dt = isoDate(dt)
     a = amt(a)
 
-    hd = fp.readline().strip() # skip blank line
+    hd = lines.next().strip() # skip blank line
     if hd: raise IOError, "expected blank line; got" + hd
     
     return fieldNames, dt, a
 
 
-def grokTransactions(fp, sink):
+def eachTrx(lines, result):
+    """Turn an iterator over lines into an interator over transactions
+
+    >>> r=[]; d=iter(_TestData); dummy=readHeader(d); \
+    t=eachTrx(d, r); len(list(t))
+    11
+    """
+
     trx = None
     splits = []
     
     while 1:
-        ln = fp.readline()
-        if not ln:
-            raise IOError, 'unexpected end-of-file'
+	try:
+	    ln = lines.next()
+	except StopIteration:
+            raise IOError, 'unexpected end-of-lines'
         if ln.endswith("\r\n"): ln = ln[:-2]
         elif ln.endswith("\n"): ln = ln[:-1]
         fields = ln.split('\t')
 
-        #progress ("fields: ", fields)
+	#progress("fields", fields)
         if fields[0]:
             if trx:
-                sink.transaction(trx, splits)
+                yield (trx, splits)
             splits = []
             trx = fields
         else:
             if fields[3].startswith("TOTAL"):
-                if trx: sink.transaction(trx, splits)
-                return ln
+                if trx: yield (trx, splits)
+                result.append(ln)
+		return
             else:
                 splits.append(fields)
 
-    return None # is there a better way to make pychecker happy?
 
-def readFooter(fp, ln):
+def readFooter(lines, ln):
     while 1:
         words = ln.split()
         if words:
@@ -131,11 +184,12 @@ def readFooter(fp, ln):
                 nettot = amt(words[2])
             else:
                 raise IOError, "unexpected data: " + ln
-            
-        ln = fp.readline()
-        if not ln: break
-        
 
+	try:
+	    ln = lines.next()
+	except StopIteration:
+	    break
+        
     return total, balance, inflows, outflows, nettot
 
     
