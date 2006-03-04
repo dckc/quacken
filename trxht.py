@@ -12,6 +12,15 @@ and put it in, say, _2004qtrx.txt_. Then invoke a la::
   $ xmlwf ,x.html
   $ firefox ,x.html
 
+Support for SPARQL-style filtering is in progress. Try::
+
+  $ python trxht.py --class myclass myqtrx.txt  >myclass-transactions.html
+
+to simulate::
+
+  describe ?TRX where { ?TRX qt:split [ qs:class "9912mit-misc"] }.
+
+
 Future Work
 -----------
 
@@ -43,11 +52,16 @@ Check them a la::
 
 from xml.sax.saxutils import escape as xmldata
 
-from trxtsv import eachFile, isoDate, numField
+from trxtsv import eachFile, isoDate, numField, ClassFilter
 
 def main(argv):
+    filter = None
+
+    if len(argv) > 2 and argv[1] == '--class':
+	filter = ClassFilter(argv[2])
+	del argv[1:3]
     sink = TrxDocSink(sys.stdout.write)
-    eachFile(argv[1:], sink)
+    eachFile(argv[1:], sink, filter)
 
 class TrxDocSink:
     """Write transactions as XHTML using microformats
