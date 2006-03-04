@@ -274,6 +274,11 @@ class TrxDocSink:
   <head profile="http://www.w3.org/2003/g/data-view
 		 http://purl.org/NET/erdf/profile">
   <link rel="transformation" href="http://www.w3.org/2002/12/cal/glean-hcal.xsl"/>
+  <style type="text/css">
+tbody.vevent tr.trx td { border-top: 1px solid }
+.amt { text-align: right }
+</style>
+
 """)
 	w(" <title>@@</title>\n")
 	w("</head>\n<body>\n")
@@ -282,24 +287,26 @@ class TrxDocSink:
 	w = self._w
 	w(" <h1>Transactions</h1>\n")
 	w(" <p>starting date: %s bal: %s</p>" % (dt, bal))
-	w(" <ul>\n")
+	w(" <table>\n")
 
     def transaction(self, trx, splits):
 	w = self._w
-	w("  <li class='vevent'>")
+	w("<tbody class='vevent'>\n")
 	date, acct, num, desc = trx[:4]
-	w("<abbr class='dtstart' title='%s'>%s</abbr>\n" % (isoDate(date), date))
-	w("<em>%s</em> <tt>%s</tt> <b>%s</b>\n" % (acct, num, xmldata(desc)))
+	w(" <tr class='trx'><td><abbr class='dtstart' title='%s'>%s</abbr>"
+	  "</td>\n" % (isoDate(date), date))
+	w("<td>%s</td> <td>%s</td> <td>%s</td></tr>\n" %
+	  (xmldata(desc), num, acct))
         splits.insert(0, ['', '', '', ''] + trx[-4:])
-	w("<ul>")
         for d1, d2, d3, d4, memo, category, clr, a in splits:
-	    w("<li>@@%s</li>\n" % (xmldata(str((memo, category, clr, a),))))
-	w("</ul>")
-	w("</li>")
+	    w("<tr class='split'><td></td><td>%s</td><td>%s</td>"
+	      "<td>%s</td><td class='amt'>%s</td></tr>\n" %
+	      (xmldata(memo), clr, xmldata(category), a))
+	w("</tbody>\n\n")
 
     def close(self):
 	w = self._w
-	w(" </ul>\n</body>\n</html>")
+	w(" </table>\n</body>\n</html>")
 
 	   
 def progress(*args):
