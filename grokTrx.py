@@ -276,7 +276,9 @@ class TrxDocSink:
   <link rel="transformation" href="http://www.w3.org/2002/12/cal/glean-hcal.xsl"/>
   <style type="text/css">
 tbody.vevent tr.trx td { border-top: 1px solid }
+tbody.vevent td { padding: 3px; margin: 0}
 .amt { text-align: right }
+.even { background: grey }
 </style>
 
 """)
@@ -288,13 +290,22 @@ tbody.vevent tr.trx td { border-top: 1px solid }
 	w(" <h1>Transactions</h1>\n")
 	w(" <p>starting date: %s bal: %s</p>" % (dt, bal))
 	w(" <table>\n")
+	self._row = 0 # don't let tables grow without bound
 
     def transaction(self, trx, splits):
 	w = self._w
-	w("<tbody class='vevent'>\n")
+
+	if self._row > 100:
+	    w("</table>\n<table>\n")
+	    self._row = 0
+	else:
+	    self._row += 1
+
 	date, acct, num, desc = trx[:4]
-	w(" <tr class='trx'><td><abbr class='dtstart' title='%s'>%s</abbr>"
-	  "</td>\n" % (isoDate(date), date))
+	datei = isoDate(date)
+	w("<tbody class='vevent'>\n")
+	w(" <tr class='trx'><td><abbr class='dtstart %s' title='%s'>%s</abbr>"
+	  "</td>\n" % (parity(datei), datei, date))
 	w("<td>%s</td> <td>%s</td> <td>%s</td></tr>\n" %
 	  (xmldata(desc), num, acct))
         splits.insert(0, ['', '', '', ''] + trx[-4:])
@@ -308,6 +319,16 @@ tbody.vevent tr.trx td { border-top: 1px solid }
 	w = self._w
 	w(" </table>\n</body>\n</html>")
 
+
+def parity(ymd):
+    """
+    >>> parity("2005-11-12")
+    'even'
+    >>> parity("2005-11-13")
+    'odd'
+    """
+    parity = int(ymd[-1]) % 2
+    return ("even", "odd")[parity]
 	   
 def progress(*args):
     import sys
