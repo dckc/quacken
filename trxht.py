@@ -103,7 +103,6 @@ tbody.vevent td { padding: 3px; margin: 0}
 	num, splitflag, trxty = numField(num)
 	w("<td>%s</td> <td>%s</td> <td>%s</td></tr>\n" %
 	  (xmldata(desc), num or trxty or '', acct))
-        splits.insert(0, ['', '', '', ''] + trx[-4:])
         for d1, d2, d3, d4, memo, category, clr, a in splits:
 	    w("<tr class='split'><td></td><td>%s</td><td>%s</td>"
 	      "<td>%s</td><td class='amt'>%s</td></tr>\n" %

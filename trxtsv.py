@@ -17,8 +17,9 @@ file, and I found that an exhaustive transaction report represents
 transfers unambiguously. Since October 2000, when my testing showed
 that I could re-create various balances and reports from these
 tab-separated reports, I have been maintaining a CVS history of
-my exported Quicken data, splitting it every few years:
+my exported Quicken data, splitting it every few years::
 
+   $ wc *qtrx.txt
     4785   38141  276520 1990-1996qtrx.txt
     6193   61973  432107 1997-1999qtrx.txt
     4307   46419  335592 2000qtrx.txt
@@ -26,12 +27,21 @@ my exported Quicken data, splitting it every few years:
     5748   59941  437710 2004qtrx.txt
    26096  261036 1878539 total
 
-I switched from CVS to mercurial a few months ago, carrying the
-history over. In total, I seem to have 189 commits/changesets.
+I switched from CVS to mercurial_ a few months ago, carrying the
+history over. I seem to have 189 commits/changesets, of which
+154 are on the qtrx files (others are on the makefile and
+related scripts). So that's about one commit every two weeks.
 
 
 .. QIF_: @@
 .. instructions_: @@
+.. mercurial_: Mercurial Distributed SCM (version 414e81ae971f)
+               Copyright (C) 2005 Matt Mackall <mpm@selenic.com>
+
+Usage
+-----
+
+The main methods are is eachFile() and eachTrx().
 
 Future Work
 -----------
@@ -48,7 +58,7 @@ Future Work
 
 """
 
-_TestData = """							
+TestString = """							
 Date	Account	Num	Description	Memo	Category	Clr	Amount
 							
 			BALANCE 12/31/99				1000.00
@@ -78,9 +88,18 @@ Date	Account	Num	Description	Memo	Category	Clr	Amount
 							
 			NET TOTAL				51,488.91
 
-""".split("\n")
+"""
+_TestLines = TestString.split("\n")
 
 def eachFile(files, sink):
+    """Iterate over transactions in the files and send them to the sink.
+
+    @param files: a list of files containing reports as above
+    @param sink: something with a transaction() method.
+
+    The transaction method gets called a la: sink.transaction(trxdata, splits).
+    See eachTrx() for the structure of trxdata and splits.
+    """
     sink.startDoc()
     
     rtot = None
@@ -108,7 +127,7 @@ def eachFile(files, sink):
 
 def readHeader(lines):
     """
-    >>> readHeader(iter(_TestData))
+    >>> readHeader(iter(_TestLines))
     (['Date', 'Account', 'Num', 'Description', 'Memo', 'Category', 'Clr', 'Amount'], '1999-12-31', '1000.00')
     """
     while 1:
@@ -133,13 +152,13 @@ def readHeader(lines):
 def eachTrx(lines, result):
     """Turn an iterator over lines into an interator over transactions
 
-    >>> r=[]; d=iter(_TestData); dummy=readHeader(d); \
+    >>> r=[]; d=iter(_TestLines); dummy=readHeader(d); \
     t=eachTrx(d, r); len(list(t))
     11
 
-    >>> r=[]; d=iter(_TestData); dummy=readHeader(d); \
+    >>> r=[]; d=iter(_TestLines); dummy=readHeader(d); \
     t=eachTrx(d, r); t.next()
-    (['1/7/94', 'Texans Checks', '1237', 'Albertsons', '', 'Home', 'R', '-17.70'], [])
+    (['1/7/94', 'Texans Checks', '1237', 'Albertsons'], [['', '', '', '', '', 'Home', 'R', '-17.70']])
     """
 
     trx = None
@@ -159,7 +178,8 @@ def eachTrx(lines, result):
             if trx:
                 yield (trx, splits)
             splits = []
-            trx = fields
+            trx = fields[:-4]
+	    splits = [['', '', '', ''] + fields[-4:]]
         else:
             if fields[3].startswith("TOTAL"):
                 if trx: yield (trx, splits)

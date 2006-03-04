@@ -114,8 +114,6 @@ class TrxSink:
         xwr.characters(trx[3])
         xwr.endElement()
 
-        splits.insert(0, ['', '', '', ''] + trx[-4:])
-
         xwr.startElement(Quacken.splits,
                          {'r:parseType': 'Collection'})
         for d1, d2, d3, d4, memo, category, clr, a in splits:
