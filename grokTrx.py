@@ -4,135 +4,29 @@
 Unlike previous approaches, we're not doing any
 normalization here.
 
-TODO: reconcile namespace/schema with other
-quicken stuff; e.g.
- - dngr2qif
- - timbl's quicken/tax stuff.
-
-ideas:
- - article about qif dups and the tab-delimited trx report
- - article about quicken and hCard/hCalendar microformats
-  - pick out phone numbers, city/state names
-  - support a form of payee smushing on label
-  - make URIs for accounts, categories, classses
-  - support some SPARQL: date range, text matching
- - investigate diff/patch, sync with mysql DB; flag ambiguous transactions
- - split into 3 modules: a quicken reader, and RDF writer, and an XHTML writer
+TODO:
+ - reconcile namespace/schema with other quicken stuff; e.g.
+   - dngr2qif
+   - timbl's quicken/tax stuff.
  - capture test cases for current functionality:
   - checking balances across multiple files
   - building dm93.rdf (and down-stream XSLT-based expense reporting)
  - restructured text a la flightCal.py, bnf2turtle.py
 
-$Id: grokTrx.py,v 1.14 2004/06/11 00:52:05 connolly Exp $
+
 """
 
-from xml.sax.saxutils import escape as xmldata
-
-def readHeader(fp):
-    while 1:
-        # skip blank line at top
-        hd = fp.readline().strip()
-        if hd: break
-    fieldNames = hd.split('\t')
-
-    while 1:
-        bal = fp.readline().strip()
-        if bal: break
-    dummy, dt, a = bal.split()
-    dt = isoDate(dt)
-    a = amt(a)
-
-    hd = fp.readline().strip() # skip blank line
-    if hd: raise IOError, "expected blank line; got" + hd
-    
-    return fieldNames, dt, a
-
-def isoDate(dt):
-    """convert quicken date format to XML date format
-    assume date between 1950 and 2050
-
-    >>> isoDate("12/31/02")
-    '2002-12-31'
-
-    >>> isoDate("12/31/96")
-    '1996-12-31'
-
-    """
-
-    mm, dd, yy = dt.split("/")
-    yy = int(yy)
-    if yy > 50:
-        yy = 1900 + yy
-    else:
-        yy = 2000 + yy
-    return "%04d-%02d-%02d" % (yy, int(mm), int(dd))
+__version__ = '$Id: grokTrx.py,v 1.14 2004/06/11 00:52:05 connolly Exp $'
 
     
-def grokTransactions(fp, sink):
-    trx = None
-    splits = []
-    
-    while 1:
-        ln = fp.readline()
-        if not ln:
-            raise IOError, 'unexpected end-of-file'
-        if ln.endswith("\r\n"): ln = ln[:-2]
-        elif ln.endswith("\n"): ln = ln[:-1]
-        fields = ln.split('\t')
+import XMLWriter # from swap http://www.w3.org/2002/12/cal/
+from trxtsv import eachFile, isoDate, numField, amt
 
-        #progress ("fields: ", fields)
-        if fields[0]:
-            if trx:
-                sink.transaction(trx, splits)
-            splits = []
-            trx = fields
-        else:
-            if fields[3].startswith("TOTAL"):
-                if trx: sink.transaction(trx, splits)
-                return ln
-            else:
-                splits.append(fields)
 
-    return None # is there a better way to make pychecker happy?
-
-def amt(s):
-    """grok amount
-
-    don't convert to float due to rounding
-
-    >>> amt("728,052.11")
-    '728052.11'
-
-    """
-    s = s.replace(',', '')
-    assert float(s) is not None
-    return s
-
-def readFooter(fp, ln):
-    while 1:
-        words = ln.split()
-        if words:
-            k = words[0]
-            if k == 'TOTAL':
-                if words[1] == 'INFLOWS':
-                    inflows = amt(words[2])
-                elif words[1] == 'OUTFLOWS':
-                    outflows = amt(words[2])
-                else:
-                    total = (isoDate(words[1]), isoDate(words[3]),
-                             amt(words[4]))
-            elif k == 'BALANCE':
-                balance = (isoDate(words[1]), amt(words[2]))
-            elif k == 'NET':
-                nettot = amt(words[2])
-            else:
-                raise IOError, "unexpected data: " + ln
-            
-        ln = fp.readline()
-        if not ln: break
-        
-
-    return total, balance, inflows, outflows, nettot
+def main(argv):
+    xwr = XMLWriter.T(sys.stdout)
+    sink = TrxSink(xwr)
+    eachFile(argv[1:], sink)
 
 
 class Namespace:
@@ -208,7 +102,7 @@ class TrxSink:
             xwr.endElement()
         if trxty:
             xwr.startElement(Quacken.NumT, {})
-            xwr.characters(num)
+            xwr.characters(trxty)
             xwr.endElement()
         else:
             if num:
@@ -267,143 +161,10 @@ class TrxSink:
         xwr = self._wr
         xwr.endElement() # close r:RDF
 
-def numField(num):
-    if num.endswith(' S'):
-	# ah... this just means split transaction. redundant.
-	num=num[:-1].strip()
-	split = 'S'
-    else:
-	split = None
-
-    if num in ('ATM', 'DEP', 'Deposit', 'EFT', 'TXFR'):
-	trxty = num
-	num = None
-    else:
-	trxty = None
-    return (num, split, trxty)
-
-class TrxDocSink:
-    """Write transactions as XHTML using microformats
-    """
-
-    def __init__(self, w):
-	"""@param : a writer function, such as f.write
-	"""
-	self._w = w
-
-    def startDoc(self):
-	w = self._w
-	w("""<?xml version="1.0" encoding="utf-8"?><!--*- nxml -*-->
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
-       "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
-  <head profile="http://www.w3.org/2003/g/data-view
-		 http://purl.org/NET/erdf/profile">
-  <link rel="transformation" href="http://www.w3.org/2002/12/cal/glean-hcal.xsl"/>
-  <style type="text/css">
-tbody.vevent tr.trx td { border-top: 1px solid }
-tbody.vevent td { padding: 3px; margin: 0}
-.amt { text-align: right }
-.even { background: grey }
-</style>
-
-""")
-	w(" <title>@@</title>\n")
-	w("</head>\n<body>\n")
-
-    def header(self, fn, fieldNames, dt, bal):
-	w = self._w
-	w(" <h1>Transactions</h1>\n")
-	w(" <p>starting date: %s bal: %s</p>" % (dt, bal))
-	w(" <table>\n")
-	self._row = 0 # don't let tables grow without bound
-
-    def transaction(self, trx, splits):
-	w = self._w
-
-	if self._row > 100:
-	    w("</table>\n<table>\n")
-	    self._row = 0
-	else:
-	    self._row += 1
-
-	date, acct, num, desc = trx[:4]
-	datei = isoDate(date)
-	w("<tbody class='vevent'>\n")
-	w(" <tr class='trx'><td><abbr class='dtstart %s' title='%s'>%s</abbr>"
-	  "</td>\n" % (parity(datei), datei, date))
-
-	num, splitflag, trxty = numField(num)
-	w("<td>%s</td> <td>%s</td> <td>%s</td></tr>\n" %
-	  (xmldata(desc), num or trxty or '', acct))
-        splits.insert(0, ['', '', '', ''] + trx[-4:])
-        for d1, d2, d3, d4, memo, category, clr, a in splits:
-	    w("<tr class='split'><td></td><td>%s</td><td>%s</td>"
-	      "<td>%s</td><td class='amt'>%s</td></tr>\n" %
-	      (xmldata(memo), clr, xmldata(category), a))
-	w("</tbody>\n\n")
-
-    def close(self):
-	w = self._w
-	w(" </table>\n</body>\n</html>")
-
-
-def parity(ymd):
-    """
-    >>> parity("2005-11-12")
-    'even'
-    >>> parity("2005-11-13")
-    'odd'
-    """
-    parity = int(ymd[-1]) % 2
-    return ("even", "odd")[parity]
 	   
-def progress(*args):
-    import sys
-    for a in args:
-        sys.stderr.write(str(a) + ' ')
-    sys.stderr.write("\n")
-
-
-def main(argv):
-    """open 1st arg as input
-    (we don't use stdin for the sake of debugging)
-    """
-
-    import sys
-    if len(argv) > 1 and argv[1] == '--mf':
-	sink = TrxDocSink(sys.stdout.write)
-	del argv[1]
-    else:
-	# from swap http://www.w3.org/2002/12/cal/
-	import XMLWriter
-	xwr = XMLWriter.T(sys.stdout)
-	sink = TrxSink(xwr)
-    sink.startDoc()
-    
-    rtot = None
-    rdate = None
-    
-    for fn in argv[1:]:
-        fp = open(fn)
-
-        fieldNames, dt, bal = readHeader(fp)
-        progress("header:" , fn, fieldNames, dt, bal)
-        if rdate and dt <> rdate:
-            raise IOError, "expected date " + rdate + " but got " + dt
-        if rtot and bal <> rtot:
-            raise IOError, "expected balance " + rtot + " but got " + bal
-        sink.header(fieldNames, fn, dt, bal)
-        ln = grokTransactions(fp, sink)
-        foot = readFooter(fp, ln)
-        progress("footer: ", fn, foot)
-        dummy, (rdate, rtot), dummy, dummy, dummy = foot
-    
-    sink.close()
-
 def _test():
     import doctest, grokTrx
-    return doctest.testmod(grokTrx)
+    return doctest.testmod()
 
 if __name__ == '__main__':
     import sys
