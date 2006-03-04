@@ -9,6 +9,20 @@ quicken stuff; e.g.
  - dngr2qif
  - timbl's quicken/tax stuff.
 
+ideas:
+ - article about qif dups and the tab-delimited trx report
+ - article about quicken and hCard/hCalendar microformats
+  - pick out phone numbers, city/state names
+  - support a form of payee smushing on label
+  - make URIs for accounts, categories, classses
+  - support some SPARQL: date range, text matching
+ - investigate diff/patch, sync with mysql DB; flag ambiguous transactions
+ - split into 3 modules: a quicken reader, and RDF writer, and an XHTML writer
+ - capture test cases for current functionality:
+  - checking balances across multiple files
+  - building dm93.rdf (and down-stream XSLT-based expense reporting)
+ - restructured text a la flightCal.py, bnf2turtle.py
+
 $Id: grokTrx.py,v 1.14 2004/06/11 00:52:05 connolly Exp $
 """
 
