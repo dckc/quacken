@@ -157,24 +157,28 @@ def readHeader(lines):
 
 
 def eachTrx(lines, result):
-    r"""Turn an iterator over lines into an interator over transactions.
+    """Turn an iterator over lines into an interator over transactions.
 
     >>> d=iter(_TestLines); dummy=readHeader(d); t=eachTrx(d, []); len(list(t))
     11
 
-    A transaction is a pair where the 1st item is a list
-    of transaction fields [date, account, num, description]
-    and the second is a list of splits. Each split
-    has 4 blank fileds (for historical reasons) followed
-    by memo, category/class, clear, and amount.
-
+    A transaction is a JSON_-like dict:
+    - trx
+      - date, payee, num, memo,
+        splits array
+	- cat, clr, subtot, memo
+        
     See isoDate(), num(), and amt() for some of the string formats.
 
-    >>> d=iter(_TestLines); dummy=readHeader(d); t=eachTrx(d, []); t.next()
-    (['1/7/94', 'Texans Checks', '1237', 'Albertsons'], [['', '', '', '', '', 'Home', 'R', '-17.70']])
+    >>> d=iter(_TestLines); dummy=readHeader(d); t=eachTrx(d, []); \
+    _sortRecord(t.next())
+    [('splits', [[('cat', 'Home'), ('clr', 'R'), ('subtot', '-17.70')]]), ('trx', [('acct', 'Texans Checks'), ('date', '1/7/94'), ('memo', 'Albertsons'), ('payee', '1237')])]
 
-    >>> d=iter(_TestLines); dummy=readHeader(d); t=eachTrx(d, []); list(t)[8]
-    (['1/3/00', 'Citi Visa HI', '', '3Com/Palm Computing 888-956-7256'], [['', '', '', '', '@@reciept?Palm IIIx replacement (phone order 3 Jan)', '[MIT 97]/9912mit-misc', 'R', '-100.00']])
+    >>> d=iter(_TestLines); dummy=readHeader(d); t=eachTrx(d, []); \
+    _sortRecord(list(t)[8])
+    [('splits', [[('acct', 'MIT 97'), ('class', '9912mit-misc'), ('clr', 'R'), ('memo', '@@reciept?Palm IIIx replacement (phone order 3 Jan)'), ('subtot', '-100.00')]]), ('trx', [('acct', 'Citi Visa HI'), ('date', '1/3/00'), ('memo', '3Com/Palm Computing 888-956-7256')])]
+
+
     """
 
     trx = None
@@ -192,17 +196,68 @@ def eachTrx(lines, result):
 	#progress("fields", fields)
         if fields[0]:
             if trx:
-                yield (trx, splits)
-            splits = []
-            trx = fields[:-4]
-	    splits = [['', '', '', ''] + fields[-4:]]
+                yield trx
+	    trx = mkRecord(('trx','splits'),
+			   (mkRecord(TrxCols, fields),
+			    [fixSplit(mkRecord(SplitCols, fields[4:]))]))
         else:
             if fields[3].startswith("TOTAL"):
-                if trx: yield (trx, splits)
+                if trx: yield trx
                 result.append(ln)
 		return
             else:
-                splits.append(fields)
+                trx['splits'].append(fixSplit(mkRecord(SplitCols, fields[4:])))
+
+
+def mkRecord(keys, fields):
+    """
+    >>> mkRecord(('date', 'acct', 'num', 'payee'), \
+    ['1/7/94', 'Texans Checks', '1237' 'Albertsons'])
+    {'date': '1/7/94', 'acct': 'Texans Checks', 'num': '1237Albertsons'}
+    """
+    d = {}
+    for k, v in zip(keys, fields):
+	if v: d[k] = v
+    return d
+
+def _sortRecord(r):
+    """just for testing
+    """
+    if type(r) is type({}):
+	it=r.items()
+	it.sort()
+	return [(k, _sortRecord(v) ) for k, v in it]
+    elif type(r) is type([]):
+	return [_sortRecord(v) for v in r]
+    else:
+	return r
+
+TrxCols = ('date', 'acct', 'payee', 'memo')
+SplitCols = ('memo', 'cat', 'clr', 'subtot')
+
+def fixSplit(rec):
+    """
+    >>> fixSplit({'cat': 'Home'})
+    {'cat': 'Home'}
+
+    >>> fixSplit({'cat': '[MIT 97]/9912mit-misc'})
+    {'acct': 'MIT 97', 'class': '9912mit-misc'}
+
+    >>> fixSplit({'cat': 'xyz/9912mit-misc'})
+    {'class': '9912mit-misc', 'cat': 'xyz'}
+    """
+
+    if not 'cat' in rec: return rec
+
+    s = rec['cat']
+    if '/' in s:
+	s, cls = s.split('/')
+	rec['class'] = cls
+	rec['cat'] = s
+    if '[' in s:
+	del rec['cat']
+	rec['acct'] = s[1:-1]
+    return rec
 
 
 def readFooter(lines, ln):
@@ -233,7 +288,17 @@ def readFooter(lines, ln):
     return total, balance, inflows, outflows, nettot
 
 
-class ClassFilter:
+class AndFilter:
+    def __init__(self, a, b):
+	self._parts = (a, b)
+
+    def __call__(self, arg):
+	for p in self._parts:
+	    if not p(arg):
+		return False
+	return True
+
+class PathFilter:
     """Make a filter function from a class name.
 
     We're simulating::
@@ -242,48 +307,42 @@ class ClassFilter:
 
    where the ... is another filter, given by the f param.
 
-    >>> f=ClassFilter('9912mit-misc'); trx=(['1/7/94', 'Texans Checks', '1237', 'Albertsons'], [['', '', '', '', '', 'Home', 'R', '-17.70']]); f(trx)
+    >>> f=PathFilter('9912mit-misc', ('splits', '*', 'class')); \
+    trx={'trx': {'date': '1/7/94', 'acct': 'Texans Checks', 'num': '1237', \
+    'memo': 'Albertsons'}, \
+    'splits': [{'cat': 'Home', 'clr': 'R', 'amt': '-17.70'}]}; \
+    f(trx)
     False
 
-    >>> f=ClassFilter('9912mit-misc'); trx=(['1/3/00', 'Citi Visa HI', '', '3Com/Palm Computing 888-956-7256'], [['', '', '', '', '@@reciept?Palm IIIx replacement (phone order 3 Jan)', '[MIT 97]/9912mit-misc', 'R', '-100.00']]); f(trx)
+    >>> f=PathFilter('9912mit-misc', ('splits', '*', 'class')); \
+    trx={'trx': {'date': '1/3/00', 'acct': 'Citi Visa HI', \
+    'memo': '3Com/Palm Computing 888-956-7256'}, \
+    'splits': [{'memo': '@@reciept?Palm IIIx replacement (phone order 3 Jan)',\
+    'acct': 'MIT 97', 'class': '9912mit-misc', 'clr': 'R', \
+    'amt': '-100.00'}]}; \
+    f(trx)
     True
 
     """
-    def __init__(self, cls, f=None):
-	self._c = cls
-	self._f = f
+    def __init__(self, v, path):
+	self._v = v
+	self._path = path
 
     def __call__(self, trx):
-	if (self._f is None or self._f(trx)):
-	    c = self._c
-	    for split in trx[1]:
-		catcls = split[5]
-		if '/' in catcls and catcls.split('/')[1] == c:
+	return pathTest(trx, self._v, self._path)
+
+def pathTest(r, v, path):
+    if len(path) == 1:
+	return r.get(path[0], None) == v
+    else:
+	if path[0] == '*':
+	    for i in r:
+		if pathTest(i, v, path[1:]):
 		    return True
-	return False
-
-
-class AccountFilter:
-    """Make a filter function from an account name.
-
-    We're simulating::
-
-      describe ?TRX where { ?TRX qt:account "ABC" }.
-
-    >>> f=AccountFilter('Texans Checks'); trx=(['1/7/94', 'Texans Checks', '1237', 'Albertsons'], [['', '', '', '', '', 'Home', 'R', '-17.70']]); f(trx)
-    True
-
-    >>> f=AccountFilter('Texans Checks'); trx=(['1/3/00', 'Citi Visa HI', '', '3Com/Palm Computing 888-956-7256'], [['', '', '', '', '@@reciept?Palm IIIx replacement (phone order 3 Jan)', '[MIT 97]/9912mit-misc', 'R', '-100.00']]); f(trx)
-    False
-
-    """
-    def __init__(self, acct, f=None):
-	self._acct = acct
-	self._f = f
-
-    def __call__(self, trx):
-	if (self._f is None or self._f(trx)):
-	    return self._acct == trx[0][1]
+	else:
+	    r = r.get(path[0], None)
+	    if r:
+		return pathTest(r, v, path[1:])
 	return False
 
 def isoDate(dt):
