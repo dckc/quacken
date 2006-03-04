@@ -85,26 +85,6 @@ def readHeader(fp):
     return fieldNames, dt, a
 
 
-def isoDate(dt):
-    """convert quicken date format to XML date format
-    assume date between 1950 and 2050
-
-    >>> isoDate("12/31/02")
-    '2002-12-31'
-
-    >>> isoDate("12/31/96")
-    '1996-12-31'
-
-    """
-
-    mm, dd, yy = dt.split("/")
-    yy = int(yy)
-    if yy > 50:
-        yy = 1900 + yy
-    else:
-        yy = 2000 + yy
-    return "%04d-%02d-%02d" % (yy, int(mm), int(dd))
-
 def grokTransactions(fp, sink):
     trx = None
     splits = []
@@ -159,6 +139,26 @@ def readFooter(fp, ln):
     return total, balance, inflows, outflows, nettot
 
     
+def isoDate(dt):
+    """convert quicken date format to XML date format
+    assume date between 1950 and 2050
+
+    >>> isoDate("12/31/02")
+    '2002-12-31'
+
+    >>> isoDate("12/31/96")
+    '1996-12-31'
+
+    """
+
+    mm, dd, yy = dt.split("/")
+    yy = int(yy)
+    if yy > 50:
+        yy = 1900 + yy
+    else:
+        yy = 2000 + yy
+    return "%04d-%02d-%02d" % (yy, int(mm), int(dd))
+
 def amt(s):
     """grok amount
 
