@@ -50,6 +50,7 @@ Check them a la::
 
 """
 
+import sre
 import getopt
 from xml.sax.saxutils import escape as xmldata
 
@@ -131,8 +132,11 @@ tbody.vevent td { padding: 3px; margin: 0}
 	  "</td>\n" % (parity(datei), datei, date))
 
 	num, splitflag, trxty = numField(num)
-	w("<td>%s</td> <td>%s</td> <td>%s</td></tr>\n" %
-	  (xmldata(desc), num or trxty or '', acct))
+
+	descElt(w, 'td', desc)
+	w("<td>%s</td> <td>%s</td></tr>\n" %
+	  (num or trxty or '', acct))
+
         for d1, d2, d3, d4, memo, category, clr, a in splits:
 	    w("<tr class='split'><td></td><td>%s</td><td>%s</td>"
 	      "<td>%s</td><td class='amt'>%s</td></tr>\n" %
@@ -142,6 +146,62 @@ tbody.vevent td { padding: 3px; margin: 0}
     def close(self):
 	w = self._w
 	w(" </table>\n</body>\n</html>")
+
+
+def descElt(w, elt, desc):
+    """
+    >>> x=[]; descElt(lambda(s): x.append(s), 'td', \
+    'KCI SHUTTLE'); ''.join(x)
+    '<td>KCI SHUTTLE</td>'
+
+    """
+
+    try:
+	fn, teli, tel, region = telRegion(desc)
+    except IndexError:
+	w("<%s>%s</%s>" % (elt, xmldata(desc), elt))
+    else:
+	w('<td class="vcard"><b class="fn org">%s</b> ' % xmldata(fn))
+	w('<a class="tel" href="tel:%s">%s</a> ' % (teli, tel))
+	if region:
+	    w('<span class="adr"><span class="region">%s</span></span>' % \
+	      region)
+	w('</td>')
+
+def telRegion(desc):
+    """Pick out phone numbers and state names from U.S. places.
+
+    >>> telRegion('KCI SHUTTLE +1-816-471-2015 MO')
+    ('KCI SHUTTLE', '+1-816-471-2015', '+1-816-471-2015', 'MO')
+
+    >>> telRegion('WAYPORT 5125196115 TX')
+    ('WAYPORT', '+1-512-519-6115', '5125196115', 'TX')
+
+    >>> telRegion('VONAGE DIGITAL VOICE 732-528-2600 NJ')
+    ('VONAGE DIGITAL VOICE', '+1-732-528-2600', '732-528-2600', 'NJ')
+
+    >>> telRegion('MICRO CENTER #191 +1-913-652-6000')
+    ('MICRO CENTER #191', '+1-913-652-6000', '+1-913-652-6000', None)
+    """
+
+    if '+' in desc: # international phone number; state optional
+	p = r'(?P<fn>[^\+]+)' \
+	    r'(?P<tel>(?P<teli>\+[\d\-\.]+))' \
+	    r'\s*(?P<region>[A-Z][A-Z])?$'
+    else: # us phone number; state required
+	p = r'(?P<fn>[^\+]+)' \
+	    r'(?P<tel>(?P<ac>\d\d\d)-?(?P<ex>\d\d\d)-?(?P<ln>\d\d\d\d))' \
+	    r'\s*(?P<region>[A-Z][A-Z])$'
+    m = sre.match(p, desc)
+    if m:
+	tel = m.group('tel')
+	try:
+	    teli = m.group('teli')
+	except IndexError:
+	    teli = "+1-%s-%s-%s" % (m.group('ac'), m.group('ex'), m.group('ln'))
+	return m.group('fn').strip(), teli, tel, m.group('region') or None
+
+    raise IndexError
 
 
 def parity(ymd):
