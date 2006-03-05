@@ -69,10 +69,14 @@ def main(argv):
     for o, a in opts:
         if o in ("-a", "--account"):
 	    sink.account = a
-	    filter = trxtsv.AccountFilter(a, filter)
+	    f = trxtsv.PathFilter(a, ('trx', 'acct',))
+	    if filter: filter = trxtsv.AndFilter(filter, f)
+	    else: filter = f
 	elif o in ("--class",):
 	    sink.splitClass = a
-	    filter = trxtsv.ClassFilter(a, filter)
+	    f = trxtsv.PathFilter(a, ('splits', '*', 'class',))
+	    if filter: filter = trxtsv.AndFilter(filter, f)
+	    else: filter = f
 	    
     trxtsv.eachFile(args, sink, filter)
 
@@ -125,22 +129,24 @@ tbody.vevent td { padding: 3px; margin: 0}
 	else:
 	    self._row += 1
 
-	date, acct, num, desc = trx[:4]
-	datei = isoDate(date)
+	datei = isoDate(trx['date'])
 	w("<tbody class='vevent'>\n")
 	w(" <tr class='trx'><td><abbr class='dtstart %s' title='%s'>%s</abbr>"
-	  "</td>\n" % (parity(datei), datei, date))
+	  "</td>\n" % (parity(datei), datei, trx['date']))
 
-	num, splitflag, trxty = numField(num)
+	num, splitflag, trxty = numField(trx.get('num', ''))
 
-	descElt(w, 'td', desc)
+	descElt(w, 'td', trx.get('payee', ''))
 	w("<td>%s</td> <td>%s</td></tr>\n" %
-	  (num or trxty or '', acct))
+	  (num or trxty or '', trx['acct']))
 
-        for d1, d2, d3, d4, memo, category, clr, a in splits:
+        for split in splits:
 	    w("<tr class='split'><td></td><td>%s</td><td>%s</td>"
 	      "<td>%s</td><td class='amt'>%s</td></tr>\n" %
-	      (xmldata(memo), clr, xmldata(category), a))
+	      (xmldata(split.get('memo', '')),
+	       split.get('clr', ''),
+	       xmldata(split.get('L', '')),
+	       split.get('subtot', '')))
 	w("</tbody>\n\n")
 
     def close(self):

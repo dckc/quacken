@@ -124,7 +124,7 @@ def eachFile(files, sink, filter=None):
 	r = []
 	for trx in eachTrx(lines, r):
 	    if filter is None or filter(trx):
-		sink.transaction(trx[0], trx[1])
+		sink.transaction(trx['trx'], trx['splits'])
         ln = r[0]
         foot = readFooter(lines, ln)
         progress("footer: ", fn, foot)
@@ -171,12 +171,12 @@ def eachTrx(lines, result):
     See isoDate(), num(), and amt() for some of the string formats.
 
     >>> d=iter(_TestLines); dummy=readHeader(d); t=eachTrx(d, []); \
-    _sortRecord(t.next())
-    [('splits', [[('cat', 'Home'), ('clr', 'R'), ('subtot', '-17.70')]]), ('trx', [('acct', 'Texans Checks'), ('date', '1/7/94'), ('memo', 'Albertsons'), ('payee', '1237')])]
+    _sr(t.next())
+    [('splits', [[('L', 'Home'), ('cat', 'Home'), ('clr', 'R'), ('subtot', '-17.70')]]), ('trx', [('acct', 'Texans Checks'), ('date', '1/7/94'), ('num', '1237'), ('payee', 'Albertsons')])]
 
     >>> d=iter(_TestLines); dummy=readHeader(d); t=eachTrx(d, []); \
-    _sortRecord(list(t)[8])
-    [('splits', [[('acct', 'MIT 97'), ('class', '9912mit-misc'), ('clr', 'R'), ('memo', '@@reciept?Palm IIIx replacement (phone order 3 Jan)'), ('subtot', '-100.00')]]), ('trx', [('acct', 'Citi Visa HI'), ('date', '1/3/00'), ('memo', '3Com/Palm Computing 888-956-7256')])]
+    _sr(list(t)[8])
+    [('splits', [[('L', '[MIT 97]/9912mit-misc'), ('acct', 'MIT 97'), ('class', '9912mit-misc'), ('clr', 'R'), ('memo', '@@reciept?Palm IIIx replacement (phone order 3 Jan)'), ('subtot', '-100.00')]]), ('trx', [('acct', 'Citi Visa HI'), ('date', '1/3/00'), ('memo', '@@reciept?Palm IIIx replacement (phone order 3 Jan)'), ('payee', '3Com/Palm Computing 888-956-7256')])]
 
 
     """
@@ -220,43 +220,43 @@ def mkRecord(keys, fields):
 	if v: d[k] = v
     return d
 
-def _sortRecord(r):
+def _sr(r):
     """just for testing
     """
     if type(r) is type({}):
 	it=r.items()
 	it.sort()
-	return [(k, _sortRecord(v) ) for k, v in it]
+	return [(k, _sr(v) ) for k, v in it]
     elif type(r) is type([]):
-	return [_sortRecord(v) for v in r]
+	return [_sr(v) for v in r]
     else:
 	return r
 
-TrxCols = ('date', 'acct', 'payee', 'memo')
-SplitCols = ('memo', 'cat', 'clr', 'subtot')
+TrxCols = ('date', 'acct', 'num', 'payee', 'memo')
+SplitCols = ('memo', 'L', 'clr', 'subtot')
 
 def fixSplit(rec):
     """
-    >>> fixSplit({'cat': 'Home'})
-    {'cat': 'Home'}
+    >>> _sr(fixSplit({'L': 'Home'}))
+    [('L', 'Home'), ('cat', 'Home')]
 
-    >>> fixSplit({'cat': '[MIT 97]/9912mit-misc'})
-    {'acct': 'MIT 97', 'class': '9912mit-misc'}
+    >>> _sr(fixSplit({'L': '[MIT 97]/9912mit-misc'}))
+    [('L', '[MIT 97]/9912mit-misc'), ('acct', 'MIT 97'), ('class', '9912mit-misc')]
 
-    >>> fixSplit({'cat': 'xyz/9912mit-misc'})
-    {'class': '9912mit-misc', 'cat': 'xyz'}
+    >>> _sr(fixSplit({'L': 'xyz/9912mit-misc'}))
+    [('L', 'xyz/9912mit-misc'), ('cat', 'xyz'), ('class', '9912mit-misc')]
     """
 
-    if not 'cat' in rec: return rec
+    if not 'L' in rec: return rec
 
-    s = rec['cat']
+    s = rec['L']
     if '/' in s:
 	s, cls = s.split('/')
 	rec['class'] = cls
-	rec['cat'] = s
     if '[' in s:
-	del rec['cat']
 	rec['acct'] = s[1:-1]
+    else:
+	rec['cat'] = s
     return rec
 
 
@@ -315,6 +315,15 @@ class PathFilter:
     False
 
     >>> f=PathFilter('9912mit-misc', ('splits', '*', 'class')); \
+    trx={'trx': {'date': '1/3/00', 'acct': 'Citi Visa HI', \
+    'memo': '3Com/Palm Computing 888-956-7256'}, \
+    'splits': [{'memo': '@@reciept?Palm IIIx replacement (phone order 3 Jan)',\
+    'acct': 'MIT 97', 'class': '9912mit-misc', 'clr': 'R', \
+    'amt': '-100.00'}]}; \
+    f(trx)
+    True
+
+    >>> f=PathFilter('Citi Visa HI', ('trx', 'acct')); \
     trx={'trx': {'date': '1/3/00', 'acct': 'Citi Visa HI', \
     'memo': '3Com/Palm Computing 888-956-7256'}, \
     'splits': [{'memo': '@@reciept?Palm IIIx replacement (phone order 3 Jan)',\
