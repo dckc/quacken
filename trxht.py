@@ -63,18 +63,24 @@ def main(argv):
 			       "a:",
 			       ["account=",
 				"class=",
+				"cat=",
 				])
     sink = TrxDocSink(sys.stdout.write)
     filter = None
     for o, a in opts:
         if o in ("-a", "--account"):
-	    sink.account = a
-	    f = trxtsv.PathFilter(a, ('trx', 'acct',))
+	    sink.addArg('--account', a)
+	    f = trxtsv.PathFilter(a, ('trx', 'acct'))
 	    if filter: filter = trxtsv.AndFilter(filter, f)
 	    else: filter = f
 	elif o in ("--class",):
-	    sink.splitClass = a
-	    f = trxtsv.PathFilter(a, ('splits', '*', 'class',))
+	    sink.addArg('--class', a)
+	    f = trxtsv.PathFilter(a, ('splits', '*', 'class'))
+	    if filter: filter = trxtsv.AndFilter(filter, f)
+	    else: filter = f
+	elif o in ("--cat",):
+	    sink.addArg('--cat', a)
+	    f = trxtsv.PathFilter(a, ('splits', '*', 'cat'))
 	    if filter: filter = trxtsv.AndFilter(filter, f)
 	    else: filter = f
 	    
@@ -89,7 +95,7 @@ class TrxDocSink:
 	"""@param : a writer function, such as f.write
 	"""
 	self._w = w
-	self.splitClass = None
+	self._args = []
 
     def startDoc(self):
 	w = self._w
@@ -111,11 +117,14 @@ tbody.vevent td { padding: 3px; margin: 0}
 	w(" <title>@@</title>\n")
 	w("</head>\n<body>\n")
 
+    def addArg(self, arg, v):
+	self._args.append((arg, v))
+
     def header(self, fn, fieldNames, dt, bal):
 	w = self._w
 	w(" <h1>Transactions</h1>\n")
-	if self.splitClass:
-	    w("<div>Limited to class: %s</div>" % self.splitClass)
+	if self._args:
+	    w("<div>Filter info: %s</div>" % self._args)
 	w(" <p>Input file starting date: %s bal: %s</p>" % (dt, bal))
 	w(" <table>\n")
 	self._row = 0 # don't let tables grow without bound
