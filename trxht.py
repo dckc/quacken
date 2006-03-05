@@ -57,6 +57,8 @@ from xml.sax.saxutils import escape as xmldata
 import trxtsv
 from trxtsv import isoDate, numField
 
+from places import States, Cities
+
 def main(argv):
 
     opts, args = getopt.getopt(argv[1:],
@@ -174,7 +176,20 @@ def descElt(w, elt, desc):
     try:
 	fn, teli, tel, region = telRegion(desc)
     except IndexError:
-	w("<%s>%s</%s>" % (elt, xmldata(desc), elt))
+	try:
+	    fn, locality, region, postcode = citySt(desc)
+	except IndexError:
+	    w("<%s>%s</%s>" % (elt, xmldata(desc), elt))
+	else:
+	    w('<td class="vcard"><b class="fn org">%s</b> ' % xmldata(fn))
+	    w('<span class="adr">' \
+	      '<span class="locality">%s</span> ' \
+	      '<abbr class="region" title="%s">%s</abbr>' % \
+	      (locality, States[region], region))
+	    if postcode:
+		w(' <u class="postal-code">%s</u>' % postcode)
+	    w('</span>')
+	    w('</td>')
     else:
 	w('<td class="vcard"><b class="fn org">%s</b> ' % xmldata(fn))
 	w('<a class="tel" href="tel:%s">%s</a> ' % (teli, tel))
@@ -217,6 +232,64 @@ def telRegion(desc):
 	return m.group('fn').strip(), teli, tel, m.group('region') or None
 
     raise IndexError
+
+
+
+
+def mkregex(state, cities):
+    r"""Make a regex from city/state data
+    assume no regex chars in 
+    >>> mkregex('KS', ['STANLEY', 'OVERLAND PARK', 'SHAWNEE MISSION'])
+    '((?P<locality>STANLEY|OVERLAND PARK|SHAWNEE MISSION))\\s*(?P<region>KS)'
+
+    """
+
+    expc = '(?P<locality>%s)' % ('|'.join([ v for v in cities]), )
+
+    return '(' + expc + (')\s*(?P<region>%s)' % state)
+
+
+PlaceExp = dict([(st, sre.compile(mkregex(st, cities))) \
+		 for st, cities in Cities])
+
+def citySt(desc):
+    """
+    >>> citySt('COLLEGE PARK FAMILY STANLEY KS')
+    ('COLLEGE PARK FAMILY', 'STANLEY', 'KS', None)
+
+    >>> citySt('COMFORT INN@PLAINFIELD, IN')
+    ('COMFORT INN', 'PLAINFIELD', 'IN', None)
+
+    >>> citySt('BP OIL@DUBLIN, OH 43016')
+    ('BP OIL', 'DUBLIN', 'OH', '43016')
+
+    another: 'USPS 1983579556 SHAWNEE MISSI KS'
+    """
+
+    postcode = None
+
+    if '@' in desc:
+	fn, where = desc.split('@')
+
+	# 3 letter code: airport
+	if sre.match(r'[A-Z][A-Z][A-Z]', where):
+	    raise IndexError
+
+	fn = fn.strip()
+	city, st = where.split(',')
+	if st[-1].isdigit() and ' ' in st:
+	    st, postcode = st.split()
+	st = st.strip()
+	return fn, city, st, postcode
+
+    for st, exp in PlaceExp.items():
+	m = exp.search(desc)
+	if m:
+	    return desc[:m.start(0)].strip(), \
+		m.group('locality'), st, postcode
+
+    raise IndexError
+
 
 
 def parity(ymd):
