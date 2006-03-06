@@ -1,18 +1,23 @@
 """
-trxtsv -- read quicken transactions
+trxtsv -- read quicken transaction reports
+==========================================
 
 The Quicken Interchange Format (QIF_) is notoriously inadequate for
-clean import/export. The instructions_ for migrating Quicken data
+clean import/export. The instructions_ for migrating Quicken_ data
 across platforms say:
 
   1. From the old platform, dump it out as QIF
   2. On the new platform, read in the QIF data
-  3. Review the results for duplicate transfers
+  3. After importing the file, verify that account balances in your
+     new Quicken for Mac 2004 data file are the same as those in
+     Quicken for Windows. If they don't match, look for duplicate or
+     missing transactions.
 
-I have not migrated my data from Windows98 to OS X because of this mess.
-I use win4lin as life-support for Quicken 2001 on my debian linux box.
+I have not migrated my data from Windows98 to OS X because of this
+mess.  I use win4lin on my debian linux box as life-support for
+Quicken 2001.
 
-Meanwhile, quicken supports printing any report to a tab-separated
+Meanwhile, Quicken supports printing any report to a tab-separated
 file, and I found that an exhaustive transaction report represents
 transfers unambiguously. Since October 2000, when my testing showed
 that I could re-create various balances and reports from these
@@ -33,30 +38,41 @@ history over. I seem to have 189 commits/changesets, of which
 related scripts). So that's about one commit every two weeks.
 
 
-.. QIF_: @@
-.. instructions_: @@
-.. mercurial_: Mercurial Distributed SCM (version 414e81ae971f)
-               Copyright (C) 2005 Matt Mackall <mpm@selenic.com>
+.. _QIF: http://en.wikipedia.org/wiki/Quicken_Interchange_Format
+.. _instructions: https://quicken.custhelp.com/cgi-bin/quicken.cfg/php/enduser/std_adp.php?p_faqid=774&p_created=1129160880&p_sid=Lr_SmM1i&p_lva=&p_sp=cF9zcmNoPTEmcF9zb3J0X2J5PSZwX2dyaWRzb3J0PSZwX3Jvd19jbnQ9OSZwX3Byb2RzPTk1LDExNCZwX2NhdHM9JnBfcHY9Mi4xMTQmcF9jdj0mcF9wYWdlPTEmcF9zZWFyY2hfdGV4dD1jb252ZXJ0IHdpbmRvd3M*&p_li=&p_topview=1#Import
+.. _mercurial: http://www.selenic.com/mercurial/
 
 Usage
 -----
 
 The main methods are is eachFile() and eachTrx().
 
+
 Future Work
 -----------
 
-  - support some SPARQL: date range, text matching
-   - the sink.transaction method is like a SPARQL describe hit
+  - support some SPARQL: date range, text matching (in progress)
+
+    - the sink.transaction method is like a SPARQL describe hit
+
     - how about a python datastructure to mirror turtle?
-     - how does that relate to JSON?
-      - and how does JSON relate to python pickles?
+
+    - and how does JSON relate to python pickles?
+
   - investigate diff/patch, sync with mysql DB; flag ambiguous transactions
-  - QA
-   - get back to pychecker happiness
-   - check rst out, add Colophon
+
+Colophon
+--------
+
+This module is documented in rst_ format for use with epydoc_.
+
+.. _epydoc: http://epydoc.sourceforge.net/
+.. _rst: http://docutils.sourceforge.net/rst.html
 
 """
+
+__docformat__ = "restructuredtext en"
+
 
 TestString = """							
 Date	Account	Num	Description	Memo	Category	Clr	Amount
@@ -95,11 +111,11 @@ def eachFile(files, sink, filter=None):
     """Iterate over selected transactions in the files and send them to
     the sink.
 
-    @param files: a list of files containing reports as above
+    :param files: a list of files containing reports as above
 
-    @param sink: something with header(), transaction(), and close() methods.
+    :param sink: something with header(), transaction(), and close() methods.
 
-    @param filter: a function from (trxdata, splits) to t/f
+    :param filter: a function from (trxdata, splits) to t/f
 
     The transaction method gets called a la: sink.transaction(trxdata, splits).
     See eachTrx() for the structure of trxdata and splits.
@@ -163,11 +179,14 @@ def eachTrx(lines, result):
     11
 
     A transaction is a JSON_-like dict:
+
     - trx
-      - date, payee, num, memo,
-        splits array
-	- cat, clr, subtot, memo
+      - date, payee, num, memo
+    - splits array
+      - cat, clr, subtot, memo
         
+    .. _JSON: http://www.json.org/
+
     See isoDate(), num(), and amt() for some of the string formats.
 
     >>> d=iter(_TestLines); dummy=readHeader(d); t=eachTrx(d, []); \
@@ -177,6 +196,7 @@ def eachTrx(lines, result):
     >>> d=iter(_TestLines); dummy=readHeader(d); t=eachTrx(d, []); \
     _sr(list(t)[8])
     [('splits', [[('L', '[MIT 97]/9912mit-misc'), ('acct', 'MIT 97'), ('class', '9912mit-misc'), ('clr', 'R'), ('memo', '@@reciept?Palm IIIx replacement (phone order 3 Jan)'), ('subtot', '-100.00')]]), ('trx', [('acct', 'Citi Visa HI'), ('date', '1/3/00'), ('memo', '@@reciept?Palm IIIx replacement (phone order 3 Jan)'), ('payee', '3Com/Palm Computing 888-956-7256')])]
+
 
 
     """
