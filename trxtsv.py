@@ -153,13 +153,33 @@ def eachTrx(lines, result):
     >>> d=iter(_TestLines); dummy=readHeader(d); t=eachTrx(d, []); len(list(t))
     11
 
-    >>> d=iter(_TestLines); dummy=readHeader(d); t=eachTrx(d, []); \
-    _sr(t.next())
-    [('splits', [[('L', 'Home'), ('cat', 'Home'), ('clr', 'R'), ('subtot', '-17.70')]]), ('trx', [('acct', 'Texans Checks'), ('date', '1/7/94'), ('num', '1237'), ('payee', 'Albertsons')])]
+    >>> from pprint import pformat as _pf; \
+    d=iter(_TestLines); dummy=readHeader(d); t=eachTrx(d, []); \
+    print _pf(_sr(t.next()))
+    [('splits',
+      [[('L', 'Home'), ('cat', 'Home'), ('clr', 'R'), ('subtot', '-17.70')]]),
+     ('trx',
+      [('acct', 'Texans Checks'),
+       ('date', '1/7/94'),
+       ('num', '1237'),
+       ('payee', 'Albertsons')])]
 
-    >>> d=iter(_TestLines); dummy=readHeader(d); t=eachTrx(d, []); \
-    _sr(list(t)[8])
-    [('splits', [[('L', '[MIT 97]/9912mit-misc'), ('acct', 'MIT 97'), ('class', '9912mit-misc'), ('clr', 'R'), ('memo', '@@reciept?Palm IIIx replacement (phone order 3 Jan)'), ('subtot', '-100.00')]]), ('trx', [('acct', 'Citi Visa HI'), ('date', '1/3/00'), ('memo', '@@reciept?Palm IIIx replacement (phone order 3 Jan)'), ('payee', '3Com/Palm Computing 888-956-7256')])]
+
+    >>> from pprint import pformat as _pf; \
+    d=iter(_TestLines); dummy=readHeader(d); t=eachTrx(d, []); \
+    print _pf(_sr(list(t)[8]))
+    [('splits',
+      [[('L', '[MIT 97]/9912mit-misc'),
+        ('acct', 'MIT 97'),
+        ('class', '9912mit-misc'),
+        ('clr', 'R'),
+        ('memo', '@@reciept?Palm IIIx replacement (phone order 3 Jan)'),
+        ('subtot', '-100.00')]]),
+     ('trx',
+      [('acct', 'Citi Visa HI'),
+       ('date', '1/3/00'),
+       ('memo', '@@reciept?Palm IIIx replacement (phone order 3 Jan)'),
+       ('payee', '3Com/Palm Computing 888-956-7256')])]
 
 
 
