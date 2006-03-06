@@ -182,7 +182,6 @@ def eachTrx(lines, result):
     """
 
     trx = None
-    splits = []
     
     while 1:
 	try:
@@ -414,6 +413,7 @@ def progress(*args):
 
 def _test():
     import doctest
+    assert(_TestLines) # tell pychecker we _do_ use this.
     return doctest.testmod()
 
 if __name__ == '__main__':
