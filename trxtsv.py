@@ -2,64 +2,37 @@
 trxtsv -- read quicken transaction reports
 ==========================================
 
-The Quicken Interchange Format (QIF_) is notoriously inadequate for
-clean import/export. The instructions_ for migrating Quicken_ data
-across platforms say:
-
-  1. From the old platform, dump it out as QIF
-  2. On the new platform, read in the QIF data
-  3. After importing the file, verify that account balances in your
-     new Quicken for Mac 2004 data file are the same as those in
-     Quicken for Windows. If they don't match, look for duplicate or
-     missing transactions.
-
-I have not migrated my data from Windows98 to OS X because of this
-mess.  I use win4lin on my debian linux box as life-support for
-Quicken 2001.
-
-Meanwhile, Quicken supports printing any report to a tab-separated
-file, and I found that an exhaustive transaction report represents
-transfers unambiguously. Since October 2000, when my testing showed
-that I could re-create various balances and reports from these
-tab-separated reports, I have been maintaining a CVS history of
-my exported Quicken data, splitting it every few years::
-
-   $ wc *qtrx.txt
-    4785   38141  276520 1990-1996qtrx.txt
-    6193   61973  432107 1997-1999qtrx.txt
-    4307   46419  335592 2000qtrx.txt
-    5063   54562  396610 2002qtrx.txt
-    5748   59941  437710 2004qtrx.txt
-   26096  261036 1878539 total
-
-I switched from CVS to mercurial_ a few months ago, carrying the
-history over. I seem to have 189 commits/changesets, of which
-154 are on the qtrx files (others are on the makefile and
-related scripts). So that's about one commit every two weeks.
-
-
-.. _QIF: http://en.wikipedia.org/wiki/Quicken_Interchange_Format
-.. _instructions: https://quicken.custhelp.com/cgi-bin/quicken.cfg/php/enduser/std_adp.php?p_faqid=774&p_created=1129160880&p_sid=Lr_SmM1i&p_lva=&p_sp=cF9zcmNoPTEmcF9zb3J0X2J5PSZwX2dyaWRzb3J0PSZwX3Jvd19jbnQ9OSZwX3Byb2RzPTk1LDExNCZwX2NhdHM9JnBfcHY9Mi4xMTQmcF9jdj0mcF9wYWdlPTEmcF9zZWFyY2hfdGV4dD1jb252ZXJ0IHdpbmRvd3M*&p_li=&p_topview=1#Import
-.. _mercurial: http://www.selenic.com/mercurial/
-
 Usage
 -----
 
 The main methods are is eachFile() and eachTrx().
 
+A transaction is a JSON_-like dict:
+
+  - trx
+
+    - date, payee, num, memo
+
+  - splits array
+
+    - cat, clr, subtot, memo
+        
+.. _JSON: http://www.json.org/
+
+See isoDate(), num(), and amt() for some of the field formats.
+
 
 Future Work
 -----------
 
-  - support some SPARQL: date range, text matching (in progress)
+  - support database loading, a la normalizeQData.py
 
-    - the sink.transaction method is like a SPARQL describe hit
+  - investigate diff/patch, sync with DB; flag ambiguous transactions
 
-    - how about a python datastructure to mirror turtle?
+  - how about a python datastructure to mirror turtle?
 
     - and how does JSON relate to python pickles?
 
-  - investigate diff/patch, sync with mysql DB; flag ambiguous transactions
 
 Colophon
 --------
@@ -120,6 +93,8 @@ def eachFile(files, sink, filter=None):
     The transaction method gets called a la: sink.transaction(trxdata, splits).
     See eachTrx() for the structure of trxdata and splits.
 
+    The sink.transaction method is like a SPARQL describe hit.
+
     @@TODO: document header() method.
     """
     sink.startDoc()
@@ -177,17 +152,6 @@ def eachTrx(lines, result):
 
     >>> d=iter(_TestLines); dummy=readHeader(d); t=eachTrx(d, []); len(list(t))
     11
-
-    A transaction is a JSON_-like dict:
-
-    - trx
-      - date, payee, num, memo
-    - splits array
-      - cat, clr, subtot, memo
-        
-    .. _JSON: http://www.json.org/
-
-    See isoDate(), num(), and amt() for some of the string formats.
 
     >>> d=iter(_TestLines); dummy=readHeader(d); t=eachTrx(d, []); \
     _sr(t.next())
