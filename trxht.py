@@ -57,7 +57,7 @@ from xml.sax.saxutils import escape as xmldata
 import trxtsv
 from trxtsv import isoDate, numField
 
-from places import States, Cities
+from places import Regions, Localities
 
 def main(argv):
 
@@ -185,7 +185,7 @@ def descElt(w, elt, desc):
 	    w('<span class="adr">' \
 	      '<span class="locality">%s</span> ' \
 	      '<abbr class="region" title="%s">%s</abbr>' % \
-	      (locality, States[region], region))
+	      (locality, Regions[region], region))
 	    if postcode:
 		w(' <u class="postal-code">%s</u>' % postcode)
 	    w('</span>')
@@ -250,7 +250,7 @@ def mkregex(state, cities):
 
 
 PlaceExp = dict([(st, sre.compile(mkregex(st, cities))) \
-		 for st, cities in Cities])
+		 for st, cities in Localities])
 
 def citySt(desc):
     """
