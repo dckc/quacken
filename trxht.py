@@ -1,16 +1,23 @@
 #!/usr/bin/python # http://www.python.org/
 """
 trxht -- format personal finance transactions as hCalendar
+----------------------------------------------------------
 
 Usage
 -----
 
 Run a transaction report over *all* of your data in some date range
-and put it in, say, _2004qtrx.txt_. Then invoke a la::
+and print it to a tab-separated file, say, ``2004qtrx.txt``. Then
+invoke a la::
 
   $ python trxht.py 2004qtrx.txt  >,x.html
   $ xmlwf ,x.html
   $ firefox ,x.html
+
+You can give multiple files, as long as the ending balance
+of one matches the starting balance of the next::
+
+  $ python trxht.py 2002qtrx.txt 2004qtrx.txt  >,x.html
 
 Support for SPARQL-style filtering is in progress. Try::
 
@@ -24,31 +31,43 @@ to simulate::
 Future Work
 -----------
 
- - add hCard support
+ - add hCards for payees (in progress)
+
   - pick out phone numbers, city/state names
+
   - support a form of payee smushing on label
- - make URIs for accounts, categories, classses
+
+ - make URIs for accounts, categories, classses, payees
+
  - support round-trip with QIF; sync back up with RDF export work in grokTrx.py
+
  - move the quacken project to mercurial
+
   - proxy via dig.csail.mit.edu or w3.org? both?
+
   - run hg serve on homer? swada? login.csail?
+
   - publish hg log stuff in a _scm/ subpath; serve the current version
     at the top
+
 
 Colophon
 --------
 
-This document is (supposed to be*) written in ReStructuredText_. The
-examples in the docstrings below are executable doctest_ unit tests.
-Check them a la::
+This module is documented in rst_ format for use with epydoc_.
+
+.. _epydoc: http://epydoc.sourceforge.net/
+.. _rst: http://docutils.sourceforge.net/docs/user/rst/quickstart.html
+
+The examples in the docstrings below are executable doctest_ unit
+tests.  Check them a la::
 
   $ python trxht.py --test
 
-.. _ReStructuredText: http://docutils.sourceforge.net/docs/user/rst/quickstart.html
 .. _doctest: http://www.python.org/doc/lib/module-doctest.html
-.. *: I haven't tested it. How do footnotes work in rst again?
 
 """
+__docformat__ = "restructuredtext en"
 
 import sre
 import getopt
@@ -94,7 +113,7 @@ class TrxDocSink:
     """
 
     def __init__(self, w):
-	"""@param : a writer function, such as f.write
+	""":param w: a writer function, such as f.write
 	"""
 	self._w = w
 	self._args = []
@@ -143,7 +162,7 @@ tbody.vevent td { padding: 3px; margin: 0}
 	datei = isoDate(trx['date'])
 	w("<tbody class='vevent'>\n")
 	w(" <tr class='trx'><td><abbr class='dtstart %s' title='%s'>%s</abbr>"
-	  "</td>\n" % (parity(datei), datei, trx['date']))
+	  "</td>\n" % (_parity(datei), datei, trx['date']))
 
 	num, splitflag, trxty = numField(trx.get('num', ''))
 
@@ -166,10 +185,18 @@ tbody.vevent td { padding: 3px; margin: 0}
 
 
 def descElt(w, elt, desc):
-    """
+    """Write transaction description element, including hCard if possible.
+
     >>> x=[]; descElt(lambda(s): x.append(s), 'td', \
     'KCI SHUTTLE'); ''.join(x)
     '<td>KCI SHUTTLE</td>'
+
+    Hmm... currently, we use python lists at one level,
+    and XHTML markup at another, just like we used to
+    for transactions. Better to use a JSON-style
+    dict again, as a mini RDF store. JSON doesn't
+    allow sharing, though. Hmm...
+
 
     """
 
@@ -237,8 +264,10 @@ def telRegion(desc):
 
 
 def mkregex(state, cities):
-    r"""Make a regex from city/state data
-    assume no regex chars in 
+    r"""Make a regex from city/state data.
+    
+    We assume no regex chars in the data.
+
     >>> mkregex('KS', ['STANLEY', 'OVERLAND PARK', 'SHAWNEE MISSION'])
     '((?P<locality>STANLEY|OVERLAND PARK|SHAWNEE MISSION))\\s*(?P<region>KS)'
 
@@ -253,7 +282,12 @@ PlaceExp = dict([(st, sre.compile(mkregex(st, cities))) \
 		 for st, cities in Localities])
 
 def citySt(desc):
-    """
+    """Parse payee/description into formatted name, locality, region, postcode.
+
+    Data comes from credit card statements, typically.
+    
+    :raises IndexError: if we can't find a region
+    
     >>> citySt('COLLEGE PARK FAMILY STANLEY KS')
     ('COLLEGE PARK FAMILY', 'STANLEY', 'KS', None)
 
@@ -263,7 +297,7 @@ def citySt(desc):
     >>> citySt('BP OIL@DUBLIN, OH 43016')
     ('BP OIL', 'DUBLIN', 'OH', '43016')
 
-    another: 'USPS 1983579556 SHAWNEE MISSI KS'
+    todo: 'USPS 1983579556 SHAWNEE MISSI KS'
     """
 
     postcode = None
@@ -292,7 +326,7 @@ def citySt(desc):
 
 
 
-def parity(ymd):
+def _parity(ymd):
     """
     >>> parity("2005-11-12")
     'even'
