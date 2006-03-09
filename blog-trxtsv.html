@@ -1,8 +1,9 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-  <title>Getting my data back from Quicken</title>
+  <title>Getting my Personal Finance data back with hCalendar and hCard</title>
 </head>
 <body>
+
 <p>The Quicken Interchange Format (<a href="http://en.wikipedia.org/wiki/Quicken_Interchange_Format">QIF</a>) is notoriously inadequate for
 clean import/export. The <a href="https://quicken.custhelp.com/cgi-bin/quicken.cfg/php/enduser/std_adp.php?p_faqid=774&amp;p_created=1129160880&amp;p_sid=Lr_SmM1i&amp;p_lva=&amp;p_sp=cF9zcmNoPTEmcF9zb3J0X2J5PSZwX2dyaWRzb3J0PSZwX3Jvd19jbnQ9OSZwX3Byb2RzPTk1LDExNCZwX2NhdHM9JnBfcHY9Mi4xMTQmcF9jdj0mcF9wYWdlPTEmcF9zZWFyY2hfdGV4dD1jb252ZXJ0IHdpbmRvd3M*&amp;p_li=&amp;p_topview=1#Import">instructions</a> for migrating <a href="http://quicken.intuit.com/">Quicken</a> data
 across platforms say:</p>
@@ -36,10 +37,269 @@ my exported Quicken data, splitting it every few years:</p>
    26096  261036 1878539 total
 </pre>
 
-<p>I switched from CVS to <a
+<p>I started a little module on <tt>dev.w3.org</tt>... I call it <a
+href= "http://dev.w3.org/cvsweb/2000/quacken/" >Quacken</a> currently,
+but I think I'm going to have to rename it for trademark reasons.  I
+started with <tt>normalizeQData.py</tt> to load the data into
+postgress for use with <a
+href="http://sacash.sourceforge.net/">saCASH</a>, but then saCASH went
+Java/Struts and all way before debian supported Java well enough for
+me to follow along. Without a way to run them in parallel and sync
+back and forth, it was a losing proposition anyway.</p>
+
+<p>Then I managed to export the data to the web by first converting it
+to RDF/XML:</p>
+
+<pre>
+qtrx93.rdf: $(TXTFILES)
+        $(PYTHON) $(<a href="http://dev.w3.org/cvsweb/2000/quacken/">QUACKEN</a>)/grokTrx.py $(TXTFILES) >$@
+</pre>
+
+<p>... and then using <tt>searchTrx.xsl</tt>
+(inside a trivial CGI script) that puts up a search form, looks for
+the relevant transactions, and returns them as XHTML. I have done
+a few other reports with XSLT; nothing remarkable, but enough
+that I'm pretty confident I could reproduce all the reports I
+use from Quicken. But the auto-fill feature is critical, and I
+didn't see a way to do that.</p>
+
+<p>Then came google suggest and ajax. I'd really like to do an
+ajax version of Quicken.</p>
+
+<p>I switched the data from CVS to <a
 href="http://www.selenic.com/mercurial/">mercurial</a> a few months
 ago, carrying the history over. I seem to have 189 commits/changesets,
 of which 154 are on the qtrx files (others are on the makefile and
 related scripts). So that's about one commit every two weeks.</p>
+
+<p>Mercurial makes it easy to keep the whole 10 year data set,
+with all the history, in sync on several different computers. So
+I had it all with me on the flight home from the W3C Tech Plenary
+in France, where we did a microformats panel. Say... transactions
+are events, right? And payee info is kinda like hCard...</p>
+
+<p>So factored out the parts of <tt>grokTrx.py</tt> that do the
+TSV file handling (<tt>trxtsv.py</tt>) and wrote an hCalendar
+output module (<tt>trxht.py</tt>).</p>
+
+<p>I also added some SPARQL-ish filtering, so you can do:</p>
+
+<pre>
+ python trxht.py --account 'MIT 2000' --class 200009xml-ny  2000qtrx.txt
+</pre>
+
+<p>And get a little microformat expense report:</p>
+
+<blockquote>
+<table border="1">
+<tbody class='vevent'>
+ <tr class='trx'><td><abbr class='dtstart even' title='2000-09-20'>9/20/00</abbr></td>
+<td class="vcard"><b class="fn org">SEPTEMBERS STEAKHOUSE</b> <span class="adr"><span class="locality">ELMSFORD</span> <abbr class="region" title="New York">NY</abbr></span></td><td></td> <td>MIT 2000</td></tr>
+
+<tr class='split'><td></td><td>19:19</td><td>c</td><td>[Citi Visa HI]/200009xml-ny</td><td class='amt'>29.33</td></tr>
+</tbody>
+
+<tbody class='vevent'>
+ <tr class='trx'><td><abbr class='dtstart even' title='2000-09-22'>9/22/00</abbr></td>
+<td class="vcard"><b class="fn org">RAMADA INNS ELMSFORD GR</b> <span class="adr"><span class="locality">ELMSFORD</span> <abbr class="region" title="New York">NY</abbr></span></td><td></td> <td>MIT 2000</td></tr>
+
+<tr class='split'><td></td><td>3 nights</td><td>c</td><td>[Citi Visa HI]/200009xml-ny</td><td class='amt'>603.96</td></tr>
+</tbody>
+
+<tbody class='vevent'>
+ <tr class='trx'><td><abbr class='dtstart even' title='2000-09-24'>9/24/00</abbr></td>
+<td class="vcard"><b class="fn org">AVIS RENT-A-CAR 1</b> <span class="adr"><span class="locality">WHITE PLAINS</span> <abbr class="region" title="New York">NY</abbr></span></td><td></td> <td>MIT 2000</td></tr>
+
+<tr class='split'><td></td><td></td><td>c</td><td>[Citi Visa HI]/200009xml-ny</td><td class='amt'>334.45</td></tr>
+</tbody>
+
+<tbody class='vevent'>
+ <tr class='trx'><td><abbr class='dtstart even' title='2001-01-16'>1/16/01</abbr></td>
+<td>MIT</td><td></td> <td>MIT 2000</td></tr>
+<tr class='split'><td></td><td>MIT check # 20157686 dated 12/28/00</td><td>c</td><td>[Intrust Checking]/200009xml-ny</td><td class='amt'>-967.74</td></tr>
+
+</tbody>
+
+
+ </table>
+</blockquote>
+
+<p>Mercurial totally revolutionizes coding on a plane. There's no way
+I would have been as productive if I couldn't commit and diff and such
+right there on the plane. I'm back to using CVS for the project now,
+in order to share it over the net, since I don't have mercurial hosting
+figured out just yet. But here's the log of what I did on the plane:</p>
+
+<pre>
+changeset:   19:d1981dd8e140
+user:        Dan Connolly &lt;connolly@w3.org>
+date:        Sat Mar  4 20:48:44 2006 -0600
+summary:     playing around with places
+
+changeset:   18:9d2f0073853b
+user:        Dan Connolly &lt;connolly@w3.org>
+date:        Sat Mar  4 18:21:35 2006 -0600
+summary:     fixed filter arg reporting
+
+changeset:   17:3993a333747b
+user:        Dan Connolly &lt;connolly@w3.org>
+date:        Sat Mar  4 18:10:10 2006 -0600
+summary:     more dict work; filters working
+
+changeset:   16:59234a4caeae
+user:        Dan Connolly &lt;connolly@w3.org>
+date:        Sat Mar  4 17:30:28 2006 -0600
+summary:     moved trx structure to dict
+
+changeset:   15:425aab9bcc52
+user:        Dan Connolly &lt;connolly@w3.org>
+date:        Sat Mar  4 20:57:17 2006 +0100
+summary:     vcards for payess with phone numbers, states
+
+changeset:   14:cbd30e67647a
+user:        Dan Connolly &lt;connolly@w3.org>
+date:        Sat Mar  4 19:12:38 2006 +0100
+summary:     filter by trx acct
+
+changeset:   13:9a2b49bc3303
+user:        Dan Connolly &lt;connolly@w3.org>
+date:        Sat Mar  4 18:45:06 2006 +0100
+summary:     explain the filter in the report
+
+changeset:   12:2ea13bafc379
+user:        Dan Connolly &lt;connolly@w3.org>
+date:        Sat Mar  4 18:36:09 2006 +0100
+summary:     class filtering option
+
+changeset:   11:a8f550c8759b
+user:        Dan Connolly &lt;connolly@w3.org>
+date:        Sat Mar  4 18:24:45 2006 +0100
+summary:     filtering in eachFile; ClassFilter
+
+changeset:   10:acac37293fdd
+user:        Dan Connolly &lt;connolly@w3.org>
+date:        Sat Mar  4 17:53:18 2006 +0100
+summary:     moved trx/splits fixing into eachTrx in the course of documenting trxtsv.py
+
+changeset:   9:5226429e9ef6
+user:        Dan Connolly &lt;connolly@w3.org>
+date:        Sat Mar  4 17:28:01 2006 +0100
+summary:     clarify eachTrx with another test
+
+changeset:   8:afd14f2aa895
+user:        Dan Connolly &lt;connolly@w3.org>
+date:        Sat Mar  4 17:19:36 2006 +0100
+summary:     replaced fp style grokTransactions with iter style eachTrx
+
+changeset:   7:eb020cda1e67
+user:        Dan Connolly &lt;connolly@w3.org>
+date:        Sat Mar  4 16:16:43 2006 +0100
+summary:     move isoDate down with field routines
+
+changeset:   6:123f66ac79ed
+user:        Dan Connolly &lt;connolly@w3.org>
+date:        Sat Mar  4 16:14:45 2006 +0100
+summary:     tweak docs; noodle on CVS/hg scm stuff
+
+changeset:   5:4f7ca3041f9a
+user:        Dan Connolly &lt;connolly@w3.org>
+date:        Sat Mar  4 16:04:07 2006 +0100
+summary:     split trxtsv and trxht out of grokTrx
+
+changeset:   4:95366c104b42
+user:        Dan Connolly &lt;connolly@w3.org>
+date:        Sat Mar  4 14:48:04 2006 +0100
+summary:     idea dump
+
+changeset:   3:62057f582298
+user:        Dan Connolly &lt;connolly@w3.org>
+date:        Sat Mar  4 09:55:48 2006 +0100
+summary:     handle S in num field
+
+changeset:   2:0c23921d0dd3
+user:        Dan Connolly &lt;connolly@w3.org>
+date:        Sat Mar  4 09:38:54 2006 +0100
+summary:     keep tables bounded; even/odd days
+
+changeset:   1:031b9758304c
+user:        Dan Connolly &lt;connolly@w3.org>
+date:        Sat Mar  4 09:19:05 2006 +0100
+summary:     table formatting. time to land
+
+changeset:   0:2d515c48130b
+user:        Dan Connolly &lt;connolly@w3.org>
+date:        Sat Mar  4 07:55:58 2006 +0100
+summary:     working on plane
+</pre>
+
+<p>I used <a class="rst-reference"
+href="http://www.python.org/doc/lib/module-doctest.html">doctest</a>
+unit testing quite a bit, and
+<a class="rst-reference" href="http://docutils.sourceforge.net/docs/user/rst/quickstart.html">rst</a> for documentation:</p>
+
+<blockquote>
+<div class="section">
+<h2 class="heading"><a id="trxht-format-personal-finance-transactions-as-hcalendar" name="trxht-format-personal-finance-transactions-as-hcalendar">trxht -- format personal finance transactions as hCalendar</a></h2>
+</div>
+<div class="section">
+<h3 class="heading"><a id="usage" name="usage">Usage</a></h3>
+<p>Run a transaction report over <em>all</em> of your data in some date range
+and print it to a tab-separated file, say, <tt class="docutils literal"><span class="pre">2004qtrx.txt</span></tt>. Then
+invoke a la:</p>
+
+<pre class="literal-block">
+$ python trxht.py 2004qtrx.txt  &gt;,x.html
+$ xmlwf ,x.html
+$ firefox ,x.html
+</pre>
+<p>You can give multiple files, as long as the ending balance
+of one matches the starting balance of the next:</p>
+<pre class="literal-block">
+$ python trxht.py 2002qtrx.txt 2004qtrx.txt  &gt;,x.html
+</pre>
+<p>Support for SPARQL-style filtering is in progress. Try:</p>
+<pre class="literal-block">
+$ python trxht.py --class myclass myqtrx.txt  &gt;myclass-transactions.html
+</pre>
+<p>to simulate:</p>
+
+<pre class="literal-block">
+describe ?TRX where { ?TRX qt:split [ qs:class &quot;9912mit-misc&quot;] }.
+</pre>
+</div>
+<div class="section">
+<h3 class="heading"><a id="future-work" name="future-work">Future Work</a></h3>
+<blockquote>
+<ul class="rst-simple">
+<li>add hCards for payees (in progress)</li>
+</ul>
+<blockquote>
+<ul class="rst-simple">
+<li>pick out phone numbers, city/state names</li>
+
+<li>support a form of payee smushing on label</li>
+</ul>
+</blockquote>
+<ul class="rst-simple">
+<li>make URIs for accounts, categories, classses, payees</li>
+<li>support round-trip with QIF; sync back up with RDF export work in grokTrx.py</li>
+<li>move the quacken project to mercurial</li>
+</ul>
+<blockquote>
+<ul class="rst-simple">
+<li>proxy via dig.csail.mit.edu or w3.org? both?</li>
+<li>run hg serve on homer? swada? login.csail?</li>
+
+<li>publish hg log stuff in a _scm/ subpath; serve the current version
+at the top</li>
+</ul>
+</blockquote>
+</blockquote>
+</div>
+</blockquote>
+
+<hr/>
+
+
 </body>
 </html>
