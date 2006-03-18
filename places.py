@@ -71,15 +71,16 @@ Regions = dict([ln.strip().split(None, 1) for ln in
                 (_States + _Provinces).split("\n")])
 
 Localities = (
+    ('GA', ['ATLANTA']),
     ('IL', ['CHICAGO']),
     ('KS', ['STANLEY', 'OVERLAND PARK', 'SHAWNEE MISSION', 'MERRIAM', 'CASSODY']),
     ('MA', ['CAMBRIDGE']),
     ('MN', ['ALBERT LEA', 'STILLWATER', 'OAKDALE']),
     ('MO', ['KANSAS CITY', 'COLUMBIA', 'FENTON']),
-    ('TX', ['AUSTIN']),
-    ('QC', ['MONTREAL', 'ST BERNARD LA']),
+    ('NY', ['BUFFALO', 'ELMSFORD', 'WHITE PLAINS']),
     ('NY', ['PATTERSONVILL']),
-    ('ON', ['NIAGARA FALLS']),
     ('OH', ['GENEVA']),
-    ('NY', ['BUFFALO']),
+    ('ON', ['NIAGARA FALLS']),
+    ('QC', ['MONTREAL', 'ST BERNARD LA']),
+    ('TX', ['AUSTIN']),
     )
