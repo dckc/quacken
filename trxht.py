@@ -37,7 +37,11 @@ Future Work
 
   - support a form of payee smushing on label
 
- - make URIs for accounts, categories, classses, payees
+ - use kid templates rather than markup inside code
+
+ - support the "num is local time" idiom as a transforming filter
+ 
+ - make URIs for accounts, categories, classes, payees
 
  - support round-trip with QIF; sync back up with RDF export work in grokTrx.py
 
@@ -171,7 +175,7 @@ tbody.vevent td { padding: 3px; margin: 0}
 	  (num or trxty or '', trx['acct']))
 
         for split in splits:
-	    w("<tr class='split'><td></td><td>%s</td><td>%s</td>"
+	    w("<tr class='split description'><td></td><td>%s</td><td>%s</td>"
 	      "<td>%s</td><td class='amt'>%s</td></tr>\n" %
 	      (xmldata(split.get('memo', '')),
 	       split.get('clr', ''),
@@ -206,9 +210,10 @@ def descElt(w, elt, desc):
 	try:
 	    fn, locality, region, postcode = citySt(desc)
 	except IndexError:
-	    w("<%s>%s</%s>" % (elt, xmldata(desc), elt))
+	    w("<%s class='summary'>%s</%s>" % (elt, xmldata(desc), elt))
 	else:
-	    w('<td class="vcard"><b class="fn org">%s</b> ' % xmldata(fn))
+	    w('<td class="location vcard"><b class="summary fn org">%s</b> ' %
+              xmldata(fn))
 	    w('<span class="adr">' \
 	      '<span class="locality">%s</span> ' \
 	      '<abbr class="region" title="%s">%s</abbr>' % \
@@ -218,7 +223,7 @@ def descElt(w, elt, desc):
 	    w('</span>')
 	    w('</td>')
     else:
-	w('<td class="vcard"><b class="fn org">%s</b> ' % xmldata(fn))
+	w('<td class="location vcard"><b class="summary fn org">%s</b> ' % xmldata(fn))
 	w('<a class="tel" href="tel:%s">%s</a> ' % (teli, tel))
 	if region:
 	    w('<span class="adr"><span class="region">%s</span></span>' % \
