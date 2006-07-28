@@ -16,7 +16,7 @@ TODO:
 
 """
 
-__version__ = '$Id: grokTrx.py,v 1.14 2004/06/11 00:52:05 connolly Exp $'
+__version__ = '$Id: grokTrx.py,v 1.15 2006/03/06 05:40:45 connolly Exp $'
 
     
 import XMLWriter # from swap http://www.w3.org/2002/12/cal/
@@ -88,14 +88,14 @@ class TrxSink:
 
         #@@use self._fieldNames
         xwr.startElement(Quacken.Date, {})
-        xwr.characters(isoDate(trx[0]))
+        xwr.characters(isoDate(trx['date']))
         xwr.endElement()
 
         xwr.startElement(Quacken.Account, {})
-        xwr.characters(trx[1])
+        xwr.characters(trx['acct'])
         xwr.endElement()
 
-        num, splitmark, trxty = numField(trx[2])
+        num, splitmark, trxty = numField(trx.get('num', ''))
         if splitmark:
             xwr.startElement(Quacken.NumS, {})
             xwr.characters('S')
@@ -110,19 +110,27 @@ class TrxSink:
                 xwr.characters(num)
                 xwr.endElement()
 
-        xwr.startElement(Quacken.Description, {})
-        xwr.characters(trx[3])
-        xwr.endElement()
+        memo = trx.get('memo', None)
+        if memo:
+            xwr.startElement(Quacken.Description, {})
+            xwr.characters(memo)
+            xwr.endElement()
 
         xwr.startElement(Quacken.splits,
                          {'r:parseType': 'Collection'})
-        for d1, d2, d3, d4, memo, category, clr, a in splits:
-            if a == '': continue # skip empty splits
+        for split in splits:
+            #@@ redundant processing of the 'L' field
+            memo, category, clr, a = split.get('memo', None), \
+                                     split.get('L', ''), \
+                                     split.get('clr', ''), \
+                                     split.get('subtot', None)
+            if a is None: continue # skip empty splits
             xwr.startElement(Quacken.Split, {})
 
-            xwr.startElement(Quacken.Memo, {})
-            xwr.characters(memo)
-            xwr.endElement()
+            if memo:
+                xwr.startElement(Quacken.Memo, {})
+                xwr.characters(memo)
+                xwr.endElement()
 
             xwr.startElement(Quacken.Class, {})
             if category.find('/') >= 0:
