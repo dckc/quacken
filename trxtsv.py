@@ -341,21 +341,64 @@ class PathFilter:
 	self._path = path
 
     def __call__(self, trx):
-	return pathTest(trx, self._v, self._path)
+        v = self._v
 
-def pathTest(r, v, path):
-    if len(path) == 1:
-	return r.get(path[0], None) == v
-    else:
-	if path[0] == '*':
-	    for i in r:
-		if pathTest(i, v, path[1:]):
-		    return True
-	else:
-	    r = r.get(path[0], None)
-	    if r:
-		return pathTest(r, v, path[1:])
-	return False
+        def pathTest(r, path):
+            if len(path) == 1:
+                return r.get(path[0], None) == v
+            else:
+                if path[0] == '*':
+                    for i in r:
+                        if pathTest(i, path[1:]):
+                            return True
+                else:
+                    r = r.get(path[0], None)
+                    if r:
+                        return pathTest(r, path[1:])
+                return False
+
+	return pathTest(trx, self._path)
+
+
+class SearchFilter(object):
+    """Make a filter for text searching.
+
+    >>> s = SearchFilter("Tex")
+    >>> d=iter(_TestLines); dummy=readHeader(d); t=eachTrx(d, [])
+    >>> [tx['trx']['date'] for tx in t if s(tx)]
+    ['1/7/94', '1/7/94', '1/1/00', '1/2/00', '1/3/00']
+    """
+    def __init__(self, q):
+        self._q = q
+
+    def __call__(self, trx):
+        q = self._q
+        
+        def search(d):
+            for k, v in d.iteritems():
+                if type(v) is type({}):
+                    if search(v): return True
+                elif type(v) is type([]):
+                    if [vv for vv in v if search(vv)]: return True
+                elif type(v) is type(''):
+                    if q in v: return True
+            return False
+        return search(trx)
+
+
+class DateFilter(object):
+    """Make a filter for text searching.
+
+    >>> s = DateFilter("1994-12-31")
+    >>> d=iter(_TestLines); dummy=readHeader(d); t=eachTrx(d, [])
+    >>> [tx['trx']['date'] for tx in t if s(tx)]
+    ['1/1/00', '1/1/00', '1/2/00', '1/3/00', '1/3/00', '1/3/00', '1/3/00']
+    """
+    def __init__(self, when):
+        self._when = when
+
+    def __call__(self, trx):
+        return isoDate(trx['trx']['date']) > self._when
 
 def isoDate(dt):
     """convert quicken date format to XML date format

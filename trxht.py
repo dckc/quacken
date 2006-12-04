@@ -89,6 +89,8 @@ def main(argv):
 			       ["account=",
 				"class=",
 				"cat=",
+				"search=",
+				"after=",
 				])
     sink = TrxDocSink(sys.stdout.write)
     filter = None
@@ -106,6 +108,16 @@ def main(argv):
 	elif o in ("--cat",):
 	    sink.addArg('--cat', a)
 	    f = trxtsv.PathFilter(a, ('splits', '*', 'cat'))
+	    if filter: filter = trxtsv.AndFilter(filter, f)
+	    else: filter = f
+	elif o in ("--search",):
+	    sink.addArg('--search', a)
+	    f = trxtsv.SearchFilter(a)
+	    if filter: filter = trxtsv.AndFilter(filter, f)
+	    else: filter = f
+	elif o in ("--after",):
+	    sink.addArg('--after', a)
+	    f = trxtsv.DateFilter(a)
 	    if filter: filter = trxtsv.AndFilter(filter, f)
 	    else: filter = f
 	    
@@ -355,7 +367,7 @@ if __name__ == '__main__':
 	try:
 	    main(sys.argv)
 	except getopt.GetoptError:
-	    print __doc__
+	    print >>sys.stderr, __doc__
 	    sys.exit(2)
 
 
