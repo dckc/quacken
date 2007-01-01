@@ -301,6 +301,16 @@ class AndFilter:
 		return False
 	return True
 
+class OrFilter:
+    def __init__(self, *args):
+	self._parts = args
+
+    def __call__(self, arg):
+	for p in self._parts:
+	    if p(arg):
+		return True
+	return False
+
 class PathFilter:
     """Make a filter function from a class name.
 
