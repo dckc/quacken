@@ -74,8 +74,11 @@ tests.  Check them a la::
 __docformat__ = "restructuredtext en"
 
 import sre
+import itertools
 import getopt
+
 from xml.sax.saxutils import escape as xmldata
+import kid
 
 import trxtsv
 from trxtsv import isoDate, numField
@@ -83,7 +86,6 @@ from trxtsv import isoDate, numField
 from places import Regions, Localities
 
 def main(argv):
-
     opts, args = getopt.getopt(argv[1:],
 			       "a:",
 			       ["account=",
@@ -92,36 +94,53 @@ def main(argv):
 				"search=",
 				"after=",
 				])
-    sink = TrxDocSink(sys.stdout.write)
+
     filter = None
+    tpl = kid.Template(file=args[0])
+    tpl.criteria = {}
+    
     for o, a in opts:
         if o in ("-a", "--account"):
-	    sink.addArg('--account', a)
+	    tpl.criteria['account'] = a
 	    f = trxtsv.PathFilter(a, ('trx', 'acct'))
 	    if filter: filter = trxtsv.AndFilter(filter, f)
 	    else: filter = f
 	elif o in ("--class",):
-	    sink.addArg('--class', a)
+	    tpl.criteria['class'] = a
 	    f = trxtsv.PathFilter(a, ('splits', '*', 'class'))
 	    if filter: filter = trxtsv.AndFilter(filter, f)
 	    else: filter = f
 	elif o in ("--cat",):
-	    sink.addArg('--cat', a)
+	    tpl.criteria['category'] = a
 	    f = trxtsv.PathFilter(a, ('splits', '*', 'cat'))
 	    if filter: filter = trxtsv.AndFilter(filter, f)
 	    else: filter = f
 	elif o in ("--search",):
-	    sink.addArg('--search', a)
+	    tpl.criteria['search'] = a
 	    f = trxtsv.SearchFilter(a)
 	    if filter: filter = trxtsv.AndFilter(filter, f)
 	    else: filter = f
 	elif o in ("--after",):
-	    sink.addArg('--after', a)
+	    tpl.criteria['after'] = a
 	    f = trxtsv.DateFilter(a)
 	    if filter: filter = trxtsv.AndFilter(filter, f)
 	    else: filter = f
-	    
-    trxtsv.eachFile(args, sink, filter)
+
+    kb = FileKB(args[1:])
+    for s in kb.generate(template=tpl, filter=filter):
+	sys.stdout.write(s)
+    
+
+
+class FileKB(object):
+    def __init__(self, filenames):
+        self._filenames = filenames
+
+    def generate(self, template, filter):
+        txs = trxtsv.trxiter(self._filenames)
+        template.transactions = itertools.ifilter(filter, txs)
+        for s in template.generate(output='xml', encoding='utf-8'):
+            yield s
 
 
 class TrxDocSink:

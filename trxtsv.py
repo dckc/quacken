@@ -80,6 +80,42 @@ Date	Account	Num	Description	Memo	Category	Clr	Amount
 """
 _TestLines = TestString.split("\n")
 
+def trxiter(files, filter=None):
+    """Iterate over selected transactions in the files,
+    a bit like SPARQL describe.
+
+    :param files: a list of files containing reports as above
+
+    :param filter: a function from (trxdata, splits) to t/f
+
+    yields (trxdata, splits) for each transaction;
+    See `eachTrx()` for the structure of trxdata and splits.
+
+    """
+    
+    rtot = None
+    rdate = None
+    
+    for fn in files:
+        lines = file(fn)
+
+        fieldNames, dt, bal = readHeader(lines)
+        progress("header:" , fn, fieldNames, dt, bal)
+        if rdate and dt <> rdate:
+            raise IOError, "expected date " + rdate + " but got " + dt
+        if rtot and bal <> rtot:
+            raise IOError, "expected balance " + rtot + " but got " + bal
+
+	r = []
+	for trx in eachTrx(lines, r):
+	    if filter is None or filter(trx):
+		yield trx
+        ln = r[0]
+        foot = readFooter(lines, ln)
+        progress("footer: ", fn, foot)
+        dummy, (rdate, rtot), dummy, dummy, dummy = foot
+
+
 def eachFile(files, sink, filter=None):
     """Iterate over selected transactions in the files and send them to
     the sink.
