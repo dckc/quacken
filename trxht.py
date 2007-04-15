@@ -76,6 +76,7 @@ __docformat__ = "restructuredtext en"
 import sre
 import itertools
 import getopt
+from decimal import Decimal
 
 from xml.sax.saxutils import escape as xmldata
 import kid
@@ -138,10 +139,35 @@ class FileKB(object):
 
     def generate(self, template, filter):
         txs = trxtsv.trxiter(self._filenames)
-        template.transactions = itertools.ifilter(filter, txs)
+        template.transactions = trxdetails(itertools.ifilter(filter, txs))
         for s in template.generate(output='xml', encoding='utf-8'):
             yield s
 
+
+def trxdetails(txs):
+    for t in txs:
+        tx = t["trx"]
+
+        # change amounts from string to decimal
+        for s in t["splits"]:
+            s["subtot"] = Decimal(s["subtot"])
+
+
+        dtstart = isoDate(tx["date"])
+        memo = tx.get("memo", "")
+
+        # local convention: put time in memo field
+        m = sre.match(r'(\d\d:\d\d)\b\s*', memo)
+        if m:
+            dtstart = "%sT%s" % (dtstart, m.group(1))
+            memo = memo[m.end(0):]
+            for s in t["splits"]:
+                if s.get("memo", '') == tx["memo"]:
+                    s["memo"] = memo
+            tx["memo"] = memo
+        t["dtstart"] = dtstart
+
+        yield t
 
 class TrxDocSink:
     """Write transactions as XHTML using microformats
