@@ -205,7 +205,7 @@ def descElt(w, elt, desc):
 
     >>> x=[]; descElt(lambda(s): x.append(s), 'td', \
     'KCI SHUTTLE'); ''.join(x)
-    '<td>KCI SHUTTLE</td>'
+    "<td class='summary'>KCI SHUTTLE</td>"
 
     Hmm... currently, we use python lists at one level,
     and XHTML markup at another, just like we used to
@@ -314,17 +314,22 @@ def citySt(desc):
     >>> citySt('BP OIL@DUBLIN, OH 43016')
     ('BP OIL', 'DUBLIN', 'OH', '43016')
 
+    >>> citySt('@@listing fees???')
+    Traceback (most recent call last):
+        ...
+    IndexError: no city/state found
+
     todo: 'USPS 1983579556 SHAWNEE MISSI KS'
     """
 
     postcode = None
 
-    if '@' in desc:
+    if '@' in desc and '@@' not in desc:
 	fn, where = desc.split('@')
 
 	# 3 letter code: airport
-	if sre.match(r'[A-Z][A-Z][A-Z]', where):
-	    raise IndexError
+	if sre.match(r'^[A-Z][A-Z][A-Z]$', where):
+	    raise IndexError, "airport code not expected"
 
 	fn = fn.strip()
 	city, st = where.split(',')
@@ -339,15 +344,15 @@ def citySt(desc):
 	    return desc[:m.start(0)].strip(), \
 		m.group('locality'), st, postcode
 
-    raise IndexError
+    raise IndexError, "no city/state found"
 
 
 
 def _parity(ymd):
     """
-    >>> parity("2005-11-12")
+    >>> _parity("2005-11-12")
     'even'
-    >>> parity("2005-11-13")
+    >>> _parity("2005-11-13")
     'odd'
     """
     parity = int(ymd[-1]) % 2
