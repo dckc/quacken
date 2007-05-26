@@ -150,7 +150,7 @@ def trxdetails(txs):
 
         # change amounts from string to decimal
         for s in t["splits"]:
-            s["subtot"] = Decimal(s["subtot"])
+            s["subtot"] = Decimal(s["subtot"].replace(",", ""))
 
 
         dtstart = isoDate(tx["date"])
