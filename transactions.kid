@@ -5,8 +5,7 @@
       >
   <head profile="http://www.w3.org/2003/g/data-view
 		 http://purl.org/NET/erdf/profile">
-    <title>SxSWi Travel Expense Voucher</title>
-    <!-- @@TODO: refactor as extension of MIT expense voucher template -->
+    <title>Transactions</title>
   <link rel="transformation"
 	href="http://www.w3.org/2002/12/cal/glean-hcal.xsl"/>
   <style type="text/css">
