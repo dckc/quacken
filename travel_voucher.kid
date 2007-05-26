@@ -81,8 +81,8 @@ tot_due = 0
 <tr>
   <th>&#160;</th>
   <td>${air["return"]}</td>
-  <td>${air["origin"]}</td>
   <td>${air["destination"]}</td>
+  <td>${air["origin"]}</td>
   <td>air</td>
 </tr>
 </tbody>
