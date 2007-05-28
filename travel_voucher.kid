@@ -55,7 +55,7 @@ tbody.vevent td { padding: 3px; margin: 0}
 
 <?python
 tot_adv = 0
-tot_due = 0
+tot_trip = 0
 ?>
 
 <tbody class="vevent">
@@ -64,7 +64,7 @@ tot_due = 0
 <!-- TODO: derive this from travel itinerary -->
 <tr>
   <th class="startblock">TICKETS $$Amount</th>
-  <?python a = air["amt"]; tot_adv += a ?>
+  <?python a = air["amt"]; tot_adv += a; tot_trip += a ?>
   <td class="amt">$a</td>
   <td>${air["note"]}</td>
 </tr>
@@ -97,7 +97,7 @@ tot_due = 0
  <th>total $$Amt?</th>
 
  <!-- TODO: account for direct-billed hotels -->
- <?python a = sum([e["amt"] for e in hotels]); tot_due += a ?>
+ <?python a = sum([e["amt"] for e in hotels]); tot_trip += a ?>
  <td class="amt">$a</td>
 </tr>
 </tbody>
@@ -116,7 +116,7 @@ tot_due = 0
  <th>MEALS—# of meals?</th>
  <td>${len(meals)}</td>
  <th>total $$Amt?</th>
- <?python a = sum([e["amt"] for e in meals]); tot_due += a ?>
+ <?python a = sum([e["amt"] for e in meals]); tot_trip += a ?>
  <td class="amt">$a</td>
 </tr>
 </tbody>
@@ -141,7 +141,7 @@ tot_due = 0
   <td class="summary location">${e["location"]}</td>
   <td class="category">${e["category"]}</td>
 
-  <?python a = e["amt"]; tot_due += a ?>
+  <?python a = e["amt"]; tot_trip += a ?>
 
   <td class="note amt">$a</td>
 </tr>
@@ -156,16 +156,18 @@ tot_due = 0
   <td class="dtstart">${e["dtstart"]}</td>
   <td class="summary" colspan="2">${e["summary"]}</td>
 
-  <?python a = e["amt"]; tot_due += a ?>
+  <?python a = e["amt"]; tot_trip += a ?>
   <td class="note amt">$a</td>
 </tr>
 <?python Heading="" ?>
 </tbody>
 
 <tbody>
+<?python tot_adv += find_advance_amount(transactions) ?>
 <tr><th>TRAVEL ADVANCE $$AMT</th><td class="amt">${tot_adv}</td></tr>
-<tr><th>TOTAL TRIP AMOUNT</th><td class="amt">${tot_adv + tot_due}</td></tr>
-<tr><th>TOTAL DUE TO TRAVELER</th><td class="amt">${tot_due}</td></tr>
+<tr><th>TOTAL TRIP AMOUNT</th><td class="amt">${tot_trip}</td></tr>
+<tr><th>TOTAL DUE TO TRAVELER</th>
+    <td class="amt">${tot_trip - tot_adv}</td></tr>
 </tbody>
 </table>
 
