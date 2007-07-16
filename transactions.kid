@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?><!--*- nxml -*-->
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml"
-      xmlns:py="http://purl.org/kid/ns#"
+      xmlns:py="http://genshi.edgewall.org/"
       >
   <head profile="http://www.w3.org/2003/g/data-view
 		 http://purl.org/NET/erdf/profile">
@@ -15,8 +15,6 @@ tbody.vevent td { padding: 3px; margin: 0}
 .even { background: grey }
 </style>
 
-<?python from trxtsv import isoDate, numField ?>
-
   </head>
 <body>
 
@@ -27,16 +25,13 @@ tbody.vevent td { padding: 3px; margin: 0}
 <!-- @@TODO: split table every 100 transactions? -->
 
 <tbody py:for="t in transactions" class='vevent'>
- <?python date = t["trx"]["date"] ?>
  <!-- todo grey/parity -->
  <tr class='trx'>
-  <td><abbr class='dtstart' title='${isoDate(date)}'>${date}</abbr></td>
-  <td>${t["trx"].get("payee",'')}</td> <!-- descElt hcard stuff@@ -->
+  <td><abbr class='dtstart' title='${t.trx.dtstart}'>${t.trx.date}</abbr></td>
+  <td>${t.trx.payee}</td> <!-- descElt hcard stuff@@ -->
 
-  <?python num, splitflag, trxty = numField(t["trx"].get('num', '')) ?>
-
-  <td>${num or trxty or ''}</td>
-  <td>${t["trx"]['acct']}</td>
+  <td>${t.trx.num or t.trx.ty or ''}</td>
+  <td>${t.trx.acct}</td>
  </tr>
  <tr py:for="split in t['splits']" class='split description'>
    <td></td>

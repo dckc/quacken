@@ -37,8 +37,6 @@ Future Work
 
   - support a form of payee smushing on label
 
- - use kid templates rather than markup inside code
-
  - support the "num is local time" idiom as a transforming filter
  
  - make URIs for accounts, categories, classes, payees
@@ -73,13 +71,13 @@ tests.  Check them a la::
 """
 __docformat__ = "restructuredtext en"
 
-import sre
+import re
 import itertools
 import getopt
 from decimal import Decimal
 
 from xml.sax.saxutils import escape as xmldata
-import kid
+from genshi.template import MarkupTemplate # http://genshi.edgewall.org/
 
 import trxtsv
 from trxtsv import isoDate, numField
@@ -97,38 +95,38 @@ def main(argv):
 				])
 
     filter = None
-    tpl = kid.Template(file=args[0])
-    tpl.criteria = {}
+    tpl = MarkupTemplate(file(args[0]), filename=args[0])
+    criteria = {}
     
     for o, a in opts:
         if o in ("-a", "--account"):
-	    tpl.criteria['account'] = a
+	    criteria['account'] = a
 	    f = trxtsv.PathFilter(a, ('trx', 'acct'))
 	    if filter: filter = trxtsv.AndFilter(filter, f)
 	    else: filter = f
 	elif o in ("--class",):
-	    tpl.criteria['class'] = a
+	    criteria['class'] = a
 	    f = trxtsv.PathFilter(a, ('splits', '*', 'class'))
 	    if filter: filter = trxtsv.AndFilter(filter, f)
 	    else: filter = f
 	elif o in ("--cat",):
-	    tpl.criteria['category'] = a
+	    criteria['category'] = a
 	    f = trxtsv.PathFilter(a, ('splits', '*', 'cat'))
 	    if filter: filter = trxtsv.AndFilter(filter, f)
 	    else: filter = f
 	elif o in ("--search",):
-	    tpl.criteria['search'] = a
+	    criteria['search'] = a
 	    f = trxtsv.SearchFilter(a)
 	    if filter: filter = trxtsv.AndFilter(filter, f)
 	    else: filter = f
 	elif o in ("--after",):
-	    tpl.criteria['after'] = a
+	    criteria['after'] = a
 	    f = trxtsv.DateFilter(a)
 	    if filter: filter = trxtsv.AndFilter(filter, f)
 	    else: filter = f
 
     kb = FileKB(args[1:])
-    for s in kb.generate(template=tpl, filter=filter):
+    for s in kb.generate(template=tpl, criteria=criteria, filter=filter):
 	sys.stdout.write(s)
     
 
@@ -137,11 +135,12 @@ class FileKB(object):
     def __init__(self, filenames):
         self._filenames = filenames
 
-    def generate(self, template, filter):
+    def generate(self, template, criteria, filter):
         txs = trxtsv.trxiter(self._filenames)
-        template.transactions = trxdetails(itertools.ifilter(filter, txs))
-        for s in template.generate(output='xml', encoding='utf-8'):
-            yield s
+        details = trxdetails(itertools.ifilter(filter, txs))
+        return template.generate(output='xml', encoding='utf-8',
+                                 transactions = details,
+                                 ).serialize()
 
 
 def trxdetails(txs):
@@ -157,7 +156,7 @@ def trxdetails(txs):
         memo = tx.get("memo", "")
 
         # local convention: put time in memo field
-        m = sre.match(r'(\d\d:\d\d)\b\s*', memo)
+        m = re.match(r'(\d\d:\d\d)\b\s*', memo)
         if m:
             dtstart = "%sT%s" % (dtstart, m.group(1))
             memo = memo[m.end(0):]
@@ -165,7 +164,12 @@ def trxdetails(txs):
                 if s.get("memo", '') == tx["memo"]:
                     s["memo"] = memo
             tx["memo"] = memo
-        t["dtstart"] = dtstart
+
+        tx["dtstart"] = dtstart
+
+        num, splitflag, trxty = numField(tx.get('num', ''))
+        tx['num'] = num
+        tx['ty'] = trxty
 
         yield t
 
@@ -311,7 +315,7 @@ def telRegion(desc):
 	p = r'(?P<fn>[^\+]+)' \
 	    r'(?P<tel>(?P<ac>\d\d\d)-?(?P<ex>\d\d\d)-?(?P<ln>\d\d\d\d))' \
 	    r'\s*(?P<region>[A-Z][A-Z])$'
-    m = sre.match(p, desc)
+    m = re.match(p, desc)
     if m:
 	tel = m.group('tel')
 	try:
@@ -340,7 +344,7 @@ def mkregex(state, cities):
     return '(' + expc + (')\s*(?P<region>%s)' % state)
 
 
-PlaceExp = dict([(st, sre.compile(mkregex(st, cities))) \
+PlaceExp = dict([(st, re.compile(mkregex(st, cities))) \
 		 for st, cities in Localities])
 
 def citySt(desc):
@@ -373,7 +377,7 @@ def citySt(desc):
 	fn, where = desc.split('@')
 
 	# 3 letter code: airport
-	if sre.match(r'^[A-Z][A-Z][A-Z]$', where):
+	if re.match(r'^[A-Z][A-Z][A-Z]$', where):
 	    raise IndexError, "airport code not expected"
 
 	fn = fn.strip()
