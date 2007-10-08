@@ -1,0 +1,244 @@
+<?xml version="1.0"?>
+<r:RDF xmlns:r="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:h="http://www.w3.org/1999/xhtml" xmlns:s="http://www.w3.org/2000/01/rdf-schema#" xmlns:dt="http://www.w3.org/2001/XMLSchema#" xmlns:owl="http://www.w3.org/2002/07/owl#">
+  <owl:Class r:ID="Accounts">
+    <s:label>Accounts</s:label>
+    <s:subClassOf>
+      <owl:Restriction>
+        <owl:onProperty>
+          <owl:DataTypeProperty r:about="#id">
+            <s:range r:resource="http://www.w3.org/2001/XMLSchema#integer"/>
+            <s:comment>and categories</s:comment>
+          </owl:DataTypeProperty>
+        </owl:onProperty>
+        <owl:cardinality r:datatype="http://www.w3.org/2001/XMLSchema#integer">1</owl:cardinality>
+      </owl:Restriction>
+    </s:subClassOf>
+    <s:subClassOf>
+      <owl:Restriction>
+        <owl:onProperty>
+          <owl:DataTypeProperty r:about="#name">
+            <s:range r:resource="http://www.w3.org/2001/XMLSchema#string"/>
+            <s:comment/>
+          </owl:DataTypeProperty>
+        </owl:onProperty>
+        <owl:cardinality r:datatype="http://www.w3.org/2001/XMLSchema#integer">1</owl:cardinality>
+      </owl:Restriction>
+    </s:subClassOf>
+    <s:subClassOf>
+      <owl:Restriction>
+        <owl:onProperty>
+          <owl:ObjectProperty r:about="#parent">
+            <s:comment/>
+          </owl:ObjectProperty>
+        </owl:onProperty>
+        <owl:allValuesFrom r:resource="#Accounts"/>
+      </owl:Restriction>
+    </s:subClassOf>
+  </owl:Class>
+  <owl:Class r:ID="Transactions">
+    <s:label>Transactions</s:label>
+    <s:subClassOf>
+      <owl:Restriction>
+        <owl:onProperty>
+          <owl:DataTypeProperty r:about="#id">
+            <s:range r:resource="http://www.w3.org/2001/XMLSchema#integer"/>
+            <s:comment/>
+          </owl:DataTypeProperty>
+        </owl:onProperty>
+        <owl:cardinality r:datatype="http://www.w3.org/2001/XMLSchema#integer">1</owl:cardinality>
+      </owl:Restriction>
+    </s:subClassOf>
+    <s:subClassOf>
+      <owl:Restriction>
+        <owl:onProperty>
+          <owl:ObjectProperty r:about="#acct">
+            <s:comment/>
+          </owl:ObjectProperty>
+        </owl:onProperty>
+        <owl:allValuesFrom r:resource="#Accounts"/>
+      </owl:Restriction>
+    </s:subClassOf>
+    <s:subClassOf>
+      <owl:Restriction>
+        <owl:onProperty>
+          <owl:DataTypeProperty r:about="#date">
+            <s:range r:resource="http://www.w3.org/2001/XMLSchema#date"/>
+            <s:comment/>
+          </owl:DataTypeProperty>
+        </owl:onProperty>
+        <owl:cardinality r:datatype="http://www.w3.org/2001/XMLSchema#integer">1</owl:cardinality>
+      </owl:Restriction>
+    </s:subClassOf>
+    <s:subClassOf>
+      <owl:Restriction>
+        <owl:onProperty>
+          <owl:DataTypeProperty r:about="#payee">
+            <s:range r:resource="http://www.w3.org/2001/XMLSchema#string"/>
+            <s:comment/>
+          </owl:DataTypeProperty>
+        </owl:onProperty>
+        <owl:cardinality r:datatype="http://www.w3.org/2001/XMLSchema#integer">1</owl:cardinality>
+      </owl:Restriction>
+    </s:subClassOf>
+    <s:subClassOf>
+      <owl:Restriction>
+        <owl:onProperty>
+          <owl:DataTypeProperty r:about="#num">
+            <s:range r:resource="http://www.w3.org/2001/XMLSchema#string"/>
+            <s:comment/>
+          </owl:DataTypeProperty>
+        </owl:onProperty>
+        <owl:cardinality r:datatype="http://www.w3.org/2001/XMLSchema#integer">1</owl:cardinality>
+      </owl:Restriction>
+    </s:subClassOf>
+    <s:subClassOf>
+      <owl:Restriction>
+        <owl:onProperty>
+          <owl:DataTypeProperty r:about="#ty">
+            <s:range r:resource="http://www.w3.org/2001/XMLSchema#string"/>
+            <s:comment/>
+          </owl:DataTypeProperty>
+        </owl:onProperty>
+        <owl:cardinality r:datatype="http://www.w3.org/2001/XMLSchema#integer">1</owl:cardinality>
+      </owl:Restriction>
+    </s:subClassOf>
+    <s:subClassOf>
+      <owl:Restriction>
+        <owl:onProperty>
+          <owl:DataTypeProperty r:about="#memo">
+            <s:range r:resource="http://www.w3.org/2001/XMLSchema#string"/>
+            <s:comment/>
+          </owl:DataTypeProperty>
+        </owl:onProperty>
+        <owl:cardinality r:datatype="http://www.w3.org/2001/XMLSchema#integer">1</owl:cardinality>
+      </owl:Restriction>
+    </s:subClassOf>
+  </owl:Class>
+  <owl:Class r:ID="Splits">
+    <s:label>Splits</s:label>
+    <s:subClassOf>
+      <owl:Restriction>
+        <owl:onProperty>
+          <owl:DataTypeProperty r:about="#id">
+            <s:range r:resource="http://www.w3.org/2001/XMLSchema#integer"/>
+            <s:comment/>
+          </owl:DataTypeProperty>
+        </owl:onProperty>
+        <owl:cardinality r:datatype="http://www.w3.org/2001/XMLSchema#integer">1</owl:cardinality>
+      </owl:Restriction>
+    </s:subClassOf>
+    <s:subClassOf>
+      <owl:Restriction>
+        <owl:onProperty>
+          <owl:ObjectProperty r:about="#trx">
+            <s:comment/>
+          </owl:ObjectProperty>
+        </owl:onProperty>
+        <owl:allValuesFrom r:resource="#Transactions"/>
+      </owl:Restriction>
+    </s:subClassOf>
+    <s:subClassOf>
+      <owl:Restriction>
+        <owl:onProperty>
+          <owl:ObjectProperty r:about="#acct">
+            <s:comment/>
+          </owl:ObjectProperty>
+        </owl:onProperty>
+        <owl:allValuesFrom r:resource="#Accounts"/>
+      </owl:Restriction>
+    </s:subClassOf>
+    <s:subClassOf>
+      <owl:Restriction>
+        <owl:onProperty>
+          <owl:ObjectProperty r:about="#cat">
+            <s:comment/>
+          </owl:ObjectProperty>
+        </owl:onProperty>
+        <owl:allValuesFrom r:resource="#Categories"/>
+      </owl:Restriction>
+    </s:subClassOf>
+    <s:subClassOf>
+      <owl:Restriction>
+        <owl:onProperty>
+          <owl:DataTypeProperty r:about="#clr">
+            <s:range r:resource="http://www.w3.org/2001/XMLSchema#string"/>
+            <s:comment/>
+          </owl:DataTypeProperty>
+        </owl:onProperty>
+        <owl:cardinality r:datatype="http://www.w3.org/2001/XMLSchema#integer">1</owl:cardinality>
+      </owl:Restriction>
+    </s:subClassOf>
+    <s:subClassOf>
+      <owl:Restriction>
+        <owl:onProperty>
+          <owl:DataTypeProperty r:about="#memo">
+            <s:range r:resource="http://www.w3.org/2001/XMLSchema#string"/>
+            <s:comment/>
+          </owl:DataTypeProperty>
+        </owl:onProperty>
+        <owl:cardinality r:datatype="http://www.w3.org/2001/XMLSchema#integer">1</owl:cardinality>
+      </owl:Restriction>
+    </s:subClassOf>
+    <s:subClassOf>
+      <owl:Restriction>
+        <owl:onProperty>
+          <owl:DataTypeProperty r:about="#subtot">
+            <s:range r:resource="http://www.w3.org/2001/XMLSchema#float"/>
+            <s:comment>hmm... decimal?</s:comment>
+          </owl:DataTypeProperty>
+        </owl:onProperty>
+        <owl:cardinality r:datatype="http://www.w3.org/2001/XMLSchema#integer">1</owl:cardinality>
+      </owl:Restriction>
+    </s:subClassOf>
+  </owl:Class>
+  <owl:Class r:ID="Payees">
+    <s:label>Payees</s:label>
+    <s:subClassOf>
+      <owl:Restriction>
+        <owl:onProperty>
+          <owl:DataTypeProperty r:about="#id">
+            <s:range r:resource="http://www.w3.org/2001/XMLSchema#integer"/>
+            <s:comment/>
+          </owl:DataTypeProperty>
+        </owl:onProperty>
+        <owl:cardinality r:datatype="http://www.w3.org/2001/XMLSchema#integer">1</owl:cardinality>
+      </owl:Restriction>
+    </s:subClassOf>
+    <s:subClassOf>
+      <owl:Restriction>
+        <owl:onProperty>
+          <owl:DataTypeProperty r:about="#name">
+            <s:range r:resource="http://www.w3.org/2001/XMLSchema#string"/>
+            <s:comment/>
+          </owl:DataTypeProperty>
+        </owl:onProperty>
+        <owl:cardinality r:datatype="http://www.w3.org/2001/XMLSchema#integer">1</owl:cardinality>
+      </owl:Restriction>
+    </s:subClassOf>
+  </owl:Class>
+  <owl:Class r:ID="Classes">
+    <s:label>Classes</s:label>
+    <s:subClassOf>
+      <owl:Restriction>
+        <owl:onProperty>
+          <owl:DataTypeProperty r:about="#id">
+            <s:range r:resource="http://www.w3.org/2001/XMLSchema#integer"/>
+            <s:comment/>
+          </owl:DataTypeProperty>
+        </owl:onProperty>
+        <owl:cardinality r:datatype="http://www.w3.org/2001/XMLSchema#integer">1</owl:cardinality>
+      </owl:Restriction>
+    </s:subClassOf>
+    <s:subClassOf>
+      <owl:Restriction>
+        <owl:onProperty>
+          <owl:DataTypeProperty r:about="#name">
+            <s:range r:resource="http://www.w3.org/2001/XMLSchema#string"/>
+            <s:comment/>
+          </owl:DataTypeProperty>
+        </owl:onProperty>
+        <owl:cardinality r:datatype="http://www.w3.org/2001/XMLSchema#integer">1</owl:cardinality>
+      </owl:Restriction>
+    </s:subClassOf>
+  </owl:Class>
+</r:RDF>
