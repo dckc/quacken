@@ -140,6 +140,7 @@ class FileKB(object):
         details = trxdetails(itertools.ifilter(filter, txs))
         return template.generate(output='xml', encoding='utf-8',
                                  transactions = details,
+                                 criteria = criteria
                                  ).serialize()
 
 
