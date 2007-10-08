@@ -245,7 +245,9 @@ def eachTrx(lines, result):
                 result.append(ln)
 		return
             else:
-                trx['splits'].append(fixSplit(mkRecord(SplitCols, fields[4:])))
+                if ln.strip():
+                    trx['splits'].append(fixSplit(mkRecord(SplitCols,
+                                                           fields[4:])))
 
 
 def mkRecord(keys, fields):
