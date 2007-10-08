@@ -24,20 +24,20 @@ tbody.vevent td { padding: 3px; margin: 0}
 <body>
 
 <table class="mittravel">
-<tbody id='${trip["id"]}' class="vevent">
+<tbody id='${trip.id}' class="vevent">
 <tr>
   <th class="startblock">NAME of traveller</th>
   <!-- factor out organizer/vcard handling -->
   <?python who = trip["organizer"] ?>
-  <td class="organizer vcard" colspan="2"><u class='fn'>${who["fn"]}</u></td>
+  <td class="organizer vcard" colspan="2"><u class='fn'>${who.fn}</u></td>
 </tr>
 <tr>
   <th>DESTINATION(S)</th>
   <!-- factor out location/vcard handling -->
-  <?python where = trip["location"] ?>
-  <td class="location vcard" id="${where['id']}" colspan="4">
-    <u class="locality">${where['locality']}</u
-    >, <u class="region">${where['region']}</u
+  <?python where = trip.location ?>
+  <td class="location vcard" id="${where.id}" colspan="4">
+    <u class="locality">${where.locality}</u
+    >, <u class="region">${where.region}</u
     >, <u class="country-name">${where['country-name']}</u>
   </td>
 </tr>
