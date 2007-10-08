@@ -1,3 +1,28 @@
+"""qdbload.py -- normalize quicken data and load into SQL DB
+
+Usage
+-----
+
+Run a transaction report over *all* of your data in some date range
+and print it to a tab-separated file, say, ``2004qtrx.txt``. Then
+invoke a la::
+
+  $ python qdbload.py 2004qtrx.txt
+
+to produce normalized data in csv files: accounts, transactions, splits,
+and classes.
+
+Using qdb.sql (derived from qdb.html; see Makefile for details)
+you can load it into a sqlite databse::
+
+  $ python qdbload.py --sqlite qdb1 --schema qdb.sql 2004qtrx.txt
+
+As with trxht.py, you may give multiple files, as long as the ending
+balance of one matches the starting balance of the next.
+
+
+"""
+
 from trxtsv import trxiter
 from trxht import trxdetails
 
@@ -6,9 +31,21 @@ from UserDict import DictMixin
 import csv
 
 def main(args):
-    fnames = args[1:]
-    txs = trxiter(fnames)
-    normalize(txs, CSVDB())
+    import getopt
+
+    db = CSVDB()
+    opts, args = getopt.getopt(args[1:], "", ["sqlite=", "schema="])
+    for o, a in opts:
+        if o == '--sqlite':
+            db = SQLiteDB(a)
+        elif o == '--schema':
+            db.loadSchema(a)
+
+    print "normalizing data from files:", args
+
+    txs = trxiter(args)
+    normalize(txs, db)
+
 
 def normalize(txs, db):
     # running ids for transactions, splits
@@ -25,6 +62,7 @@ def normalize(txs, db):
     for trx in trxdetails(txs):
         tx = trx['trx']
         db.insert(txw,
+                  ('id', 'acct', 'date', 'payee', 'num', 'ty', 'memo'),
                   (tid, accounts[tx['acct']],
                    tx['date'],
                    tx.get('payee', None),
@@ -44,6 +82,7 @@ def normalize(txs, db):
             else:
                 cls = None
             db.insert(splits,
+                      ('id', 'trx', 'acct', 'cat', 'clr', 'memo', 'subtot'),
                       (sid, tid,
                        accounts[a2],
                        cls,
@@ -52,15 +91,7 @@ def normalize(txs, db):
                        split['subtot']))
             sid += 1
         tid += 1
-
-
-
-class CSVDB(object):
-    def mktable(self, name):
-        return csv.writer(open(name + ".csv", "wb"))
-
-    def insert(self, t, row):
-        t.writerow(row)
+    db.commit()
 
 
 class NameTable(object, DictMixin):
@@ -80,7 +111,7 @@ class NameTable(object, DictMixin):
         except KeyError:
             v = self._i
             d[k] = v
-            self._db.insert(self._t, (v, k))
+            self._db.insert(self._t, ('id', 'name'), (v, k))
             self._i += 1
             return v
 
@@ -93,6 +124,52 @@ class NameTable(object, DictMixin):
     def __delitem__(self, k):
         raise RuntimeError
 
+
+class CSVDB(object):
+    def mktable(self, name):
+        return csv.writer(open(name + ".csv", "wb"))
+
+    def insert(self, t, fields, row):
+        t.writerow(row)
+
+    def commit(self):
+        pass
+
+class SQLiteDB(object):
+    
+    def __init__(self, name):
+        import sqlite3
+        self._cx = sqlite3.connect(name)
+
+        from decimal import Decimal
+        sqlite3.register_adapter(Decimal, str)
+
+        
+    def loadSchema(self, schemafn):
+        cur = self._cx.cursor()
+        for stmt in open(schemafn).read().split(";"):
+            cur.execute(stmt)
+        self._cx.commit()
+        
+    def mktable(self, name):
+        return name
+
+    def insert(self, t, fields, row):
+        cur = self._cx.cursor()
+        cur.execute(asSQL(t, fields), row)
+
+    def commit(self):
+        self._cx.commit()
+
+def asSQL(t, fields):
+    """
+    >>> asSQL("things", ('size', 'weight', 'length'))
+    'insert into things (size, weight, length) values (?, ?, ?)'
+    """
+    return "insert into %s (%s) values (%s)" % \
+                    (t,
+                     ", ".join(fields),
+                     ", ".join(['?'] * len(fields)))
 
 def _test():
     import doctest
