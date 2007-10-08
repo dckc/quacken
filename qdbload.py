@@ -34,10 +34,12 @@ def main(args):
     import getopt
 
     db = CSVDB()
-    opts, args = getopt.getopt(args[1:], "", ["sqlite=", "schema="])
+    opts, args = getopt.getopt(args[1:], "", ["sqlite=", "schema=", "prefix="])
     for o, a in opts:
         if o == '--sqlite':
             db = SQLiteDB(a)
+        elif o == '--prefix':
+            db.prefix(a)
         elif o == '--schema':
             db.loadSchema(a)
 
@@ -52,17 +54,18 @@ def normalize(txs, db):
     tid = 1
     sid = 1
 
-    txw = db.mktable("transactions")
-    splits = db.mktable("splits")
-    accounts = NameTable("accounts")
+    txw = db.mktable("Transaction")
+    splits = db.mktable("Split")
+    accounts = NameTable("Account")
     accounts.open(db)
-    classes = NameTable("classes")
+    classes = NameTable("Job")
     classes.open(db)
 
     for trx in trxdetails(txs):
         tx = trx['trx']
         db.insert(txw,
-                  ('id', 'acct', 'date', 'payee', 'num', 'ty', 'memo'),
+                  # django adds _id to ref fields
+                  ('id', 'acct_id', 'date', 'payee', 'num', 'ty', 'memo'),
                   (tid, accounts[tx['acct']],
                    tx['date'],
                    tx.get('payee', None),
@@ -82,7 +85,8 @@ def normalize(txs, db):
             else:
                 cls = None
             db.insert(splits,
-                      ('id', 'trx', 'acct', 'cat', 'clr', 'memo', 'subtot'),
+                      ('id', 'trx_id', 'acct_id',
+                       'job_id', 'clr', 'memo', 'subtot'),
                       (sid, tid,
                        accounts[a2],
                        cls,
@@ -140,10 +144,14 @@ class SQLiteDB(object):
     def __init__(self, name):
         import sqlite3
         self._cx = sqlite3.connect(name)
+        self._pfx = ''
 
         from decimal import Decimal
         sqlite3.register_adapter(Decimal, str)
 
+        
+    def prefix(self, pfx):
+        self._pfx = pfx
         
     def loadSchema(self, schemafn):
         cur = self._cx.cursor()
@@ -152,7 +160,7 @@ class SQLiteDB(object):
         self._cx.commit()
         
     def mktable(self, name):
-        return name
+        return self._pfx + name
 
     def insert(self, t, fields, row):
         cur = self._cx.cursor()
