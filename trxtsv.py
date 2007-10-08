@@ -286,17 +286,20 @@ def fixSplit(rec):
 
     >>> _sr(fixSplit({'L': 'xyz/9912mit-misc'}))
     [('L', 'xyz/9912mit-misc'), ('cat', 'xyz'), ('class', '9912mit-misc')]
+    >>> _sr(fixSplit({'L': '[N/A]'}))
+    [('L', '[N/A]'), ('acct', 'N/A')]
     """
 
     if not 'L' in rec: return rec
 
     s = rec['L']
+    if s.startswith('['):
+        acct, s = s[1:].split("]")
+	rec['acct'] = acct
     if '/' in s:
 	s, cls = s.split('/')
 	rec['class'] = cls
-    if '[' in s:
-	rec['acct'] = s[1:-1]
-    else:
+    if s:
 	rec['cat'] = s
     return rec
 
