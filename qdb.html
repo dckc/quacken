@@ -22,7 +22,7 @@
 
 <tbody>
 <tr>
-<td>Accounts</td>
+<td>Account</td>
 <td>id</td>
 <td>int</td>
 <td></td>
@@ -38,12 +38,31 @@
 <td></td>
 <td>parent</td>
 <td>int</td>
-<td>Accounts</td>
+<td>Account</td>
+<td></td>
 </tr>
 </tbody>
 <tbody>
 <tr>
-<td>Transactions</td>
+<td>Job</td>
+<td>id</td>
+<td>int</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>name</td>
+<td>text</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+<tbody>
+<tr>
+<td>Transaction</td>
 <td>id</td>
 <td>int</td>
 </tr>
@@ -51,7 +70,7 @@
 <td></td>
 <td>acct</td>
 <td>int</td>
-<td>Accounts</td>
+<td>Account</td>
 </tr>
 <tr>
 <td></td>
@@ -82,7 +101,7 @@
 
 <tbody>
 <tr>
-<td>Splits</td>
+<td>Split</td>
 <td>id</td>
 <td>int</td>
 <td></td>
@@ -93,7 +112,7 @@
 <td></td>
 <td>trx</td>
 <td>int</td>
-<td>Transactions</td>
+<td>Transaction</td>
 <td></td>
 <td></td>
 </tr>
@@ -101,13 +120,13 @@
 <td></td>
 <td>acct</td>
 <td>int</td>
-<td>Accounts</td>
+<td>Account</td>
 </tr>
 <tr>
 <td></td>
-<td>cat</td>
+<td>job</td>
 <td>int</td>
-<td>Categories</td>
+<td>Job</td>
 </tr>
 <tr>
 <td></td>
@@ -136,25 +155,7 @@
 </tbody>
 <tbody>
 <tr>
-<td>Payees</td>
-<td>id</td>
-<td>int</td>
-<td></td>
-<td></td>
-<td></td>
-</tr>
-<tr>
-<td></td>
-<td>name</td>
-<td>text</td>
-<td></td>
-<td></td>
-<td></td>
-</tr>
-</tbody>
-<tbody>
-<tr>
-<td>Classes</td>
+<td>Payee</td>
 <td>id</td>
 <td>int</td>
 <td></td>
@@ -171,5 +172,12 @@
 </tr>
 </tbody>
 </table>
+
+<p>Per <a
+href="http://www.twistedmatrix.com/documents/current/howto/policy/coding-standard#auto15">twisted
+conventions</a>, <q>Database tables will be named with plural nouns</q>.
+Hmm... seems to conflict with <a href="http://www.djangoproject.com/documentation/0.96/tutorial02/">django admin</a> defaults.
+</p>
+
 </body>
 </html>
