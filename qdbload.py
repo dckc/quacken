@@ -23,7 +23,7 @@ balance of one matches the starting balance of the next.
 
 """
 
-from trxtsv import trxiter
+from trxtsv import trxiter, isoDate
 from trxht import trxdetails
 
 from UserDict import DictMixin
@@ -67,7 +67,7 @@ def normalize(txs, db):
                   # django adds _id to ref fields
                   ('id', 'acct_id', 'date', 'payee', 'num', 'ty', 'memo'),
                   (tid, accounts[tx['acct']],
-                   tx['date'],
+                   isoDate(tx['date']),
                    tx.get('payee', None),
                    tx.get('num', None),
                    tx.get('ty', None),
@@ -78,18 +78,16 @@ def normalize(txs, db):
 
             # combine categories and transfer accounts
             a2 = split.get('acct', split.get('cat'))
+            if a2: a2 = accounts[a2]
             if 'class' in split:
                 cls = classes[split['class']]
-                if split['class'] == 'A]':
-                    raise ValueError, trx
             else:
                 cls = None
             db.insert(splits,
                       ('id', 'trx_id', 'acct_id',
                        'job_id', 'clr', 'memo', 'subtot'),
                       (sid, tid,
-                       accounts[a2],
-                       cls,
+                       a2, cls,
                        split.get('clr', None),
                        split.get('memo', None),
                        split['subtot']))
@@ -109,6 +107,7 @@ class NameTable(object, DictMixin):
         self._t = db.mktable(self._name)
 
     def __getitem__(self, k):
+        assert k is not None
         d = self._d
         try:
             return d[k]
