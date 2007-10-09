@@ -10,18 +10,18 @@ Run a transaction report over *all* of your data in some date range
 and print it to a tab-separated file, say, ``2004qtrx.txt``. Then
 invoke a la::
 
-  $ python trxht.py 2004qtrx.txt  >,x.html
+  $ python trxht.py transactions.xml 2004qtrx.txt  >,x.html
   $ xmlwf ,x.html
   $ firefox ,x.html
 
 You can give multiple files, as long as the ending balance
 of one matches the starting balance of the next::
 
-  $ python trxht.py 2002qtrx.txt 2004qtrx.txt  >,x.html
+  $ python trxht.py tpl.xml 2002qtrx.txt 2004qtrx.txt  >,x.html
 
 Support for SPARQL-style filtering is in progress. Try::
 
-  $ python trxht.py --class myclass myqtrx.txt  >myclass-transactions.html
+  $ python trxht.py --class myclass tpl.xml myqtrx.txt  >myclass.html
 
 to simulate::
 
@@ -31,6 +31,12 @@ to simulate::
 Future Work
 -----------
 
+ - migrate hCard markup to genshi
+ 
+ - web access to accounts, categories, classes, payees
+
+   - django integration in progress; see qdbload.py
+
  - add hCards for payees (in progress)
 
   - pick out phone numbers, city/state names
@@ -39,17 +45,9 @@ Future Work
 
  - support the "num is local time" idiom as a transforming filter
  
- - make URIs for accounts, categories, classes, payees
-
  - support round-trip with QIF; sync back up with RDF export work in grokTrx.py
 
- - move the quacken project to mercurial
-
-  - proxy via dig.csail.mit.edu or w3.org? both?
-
-  - run hg serve on homer? swada? login.csail?
-
-  - publish hg log stuff in a _scm/ subpath; serve the current version
+ - publish hg log stuff in a _scm/ subpath; serve the current version
     at the top
 
 
@@ -80,11 +78,12 @@ from xml.sax.saxutils import escape as xmldata
 from genshi.template import MarkupTemplate # http://genshi.edgewall.org/
 
 import trxtsv
-from trxtsv import isoDate, numField
+from trxtsv import isoDate, numField, TestData
 
 from places import Regions, Localities
 
 def main(argv):
+    import sys
     opts, args = getopt.getopt(argv[1:],
 			       "a:",
 			       ["account=",
@@ -101,34 +100,154 @@ def main(argv):
     for o, a in opts:
         if o in ("-a", "--account"):
 	    criteria['account'] = a
-	    f = trxtsv.PathFilter(a, ('trx', 'acct'))
-	    if filter: filter = trxtsv.AndFilter(filter, f)
+	    f = PathFilter(a, ('trx', 'acct'))
+	    if filter: filter = AndFilter(filter, f)
 	    else: filter = f
 	elif o in ("--class",):
 	    criteria['class'] = a
-	    f = trxtsv.PathFilter(a, ('splits', '*', 'class'))
-	    if filter: filter = trxtsv.AndFilter(filter, f)
+	    f = PathFilter(a, ('splits', '*', 'class'))
+	    if filter: filter = AndFilter(filter, f)
 	    else: filter = f
 	elif o in ("--cat",):
 	    criteria['category'] = a
-	    f = trxtsv.PathFilter(a, ('splits', '*', 'cat'))
-	    if filter: filter = trxtsv.AndFilter(filter, f)
+	    f = PathFilter(a, ('splits', '*', 'cat'))
+	    if filter: filter = AndFilter(filter, f)
 	    else: filter = f
 	elif o in ("--search",):
 	    criteria['search'] = a
-	    f = trxtsv.SearchFilter(a)
-	    if filter: filter = trxtsv.AndFilter(filter, f)
+	    f = SearchFilter(a)
+	    if filter: filter = AndFilter(filter, f)
 	    else: filter = f
 	elif o in ("--after",):
 	    criteria['after'] = a
-	    f = trxtsv.DateFilter(a)
-	    if filter: filter = trxtsv.AndFilter(filter, f)
+	    f = DateFilter(a)
+	    if filter: filter = AndFilter(filter, f)
 	    else: filter = f
 
     kb = FileKB(args[1:])
     for s in kb.generate(template=tpl, criteria=criteria, filter=filter):
 	sys.stdout.write(s)
     
+
+
+class AndFilter:
+    def __init__(self, a, b):
+	self._parts = (a, b)
+
+    def __call__(self, arg):
+	for p in self._parts:
+	    if not p(arg):
+		return False
+	return True
+
+class OrFilter:
+    def __init__(self, *args):
+	self._parts = args
+
+    def __call__(self, arg):
+	for p in self._parts:
+	    if p(arg):
+		return True
+	return False
+
+class PathFilter:
+    """Make a filter function from a class name.
+
+    We're simulating::
+
+      describe ?TRX where { ... ?TRX qt:split [ qs:class "9912mit-misc"] }.
+
+   where the ... is another filter, given by the f param.
+
+    >>> f=PathFilter('9912mit-misc', ('splits', '*', 'class')); \
+    trx={'trx': {'date': '1/7/94', 'acct': 'Texans Checks', 'num': '1237', \
+    'memo': 'Albertsons'}, \
+    'splits': [{'cat': 'Home', 'clr': 'R', 'amt': '-17.70'}]}; \
+    f(trx)
+    False
+
+    >>> f=PathFilter('9912mit-misc', ('splits', '*', 'class')); \
+    trx={'trx': {'date': '1/3/00', 'acct': 'Citi Visa HI', \
+    'memo': '3Com/Palm Computing 888-956-7256'}, \
+    'splits': [{'memo': '@@reciept?Palm IIIx replacement (phone order 3 Jan)',\
+    'acct': 'MIT 97', 'class': '9912mit-misc', 'clr': 'R', \
+    'amt': '-100.00'}]}; \
+    f(trx)
+    True
+
+    >>> f=PathFilter('Citi Visa HI', ('trx', 'acct')); \
+    trx={'trx': {'date': '1/3/00', 'acct': 'Citi Visa HI', \
+    'memo': '3Com/Palm Computing 888-956-7256'}, \
+    'splits': [{'memo': '@@reciept?Palm IIIx replacement (phone order 3 Jan)',\
+    'acct': 'MIT 97', 'class': '9912mit-misc', 'clr': 'R', \
+    'amt': '-100.00'}]}; \
+    f(trx)
+    True
+
+    """
+    def __init__(self, v, path):
+	self._v = v
+	self._path = path
+
+    def __call__(self, trx):
+        v = self._v
+
+        def pathTest(r, path):
+            if len(path) == 1:
+                return r.get(path[0], None) == v
+            else:
+                if path[0] == '*':
+                    for i in r:
+                        if pathTest(i, path[1:]):
+                            return True
+                else:
+                    r = r.get(path[0], None)
+                    if r:
+                        return pathTest(r, path[1:])
+                return False
+
+	return pathTest(trx, self._path)
+
+
+class SearchFilter(object):
+    """Make a filter for text searching.
+
+    >>> s = SearchFilter("Tex")
+    >>> t = trxtsv.TestData()
+    >>> [tx['trx']['date'] for tx in t if s(tx)]
+    ['1/7/94', '1/7/94', '1/1/00', '1/2/00', '1/3/00']
+    """
+    def __init__(self, q):
+        self._q = q
+
+    def __call__(self, trx):
+        q = self._q
+        
+        def search(d):
+            for k, v in d.iteritems():
+                if type(v) is type({}):
+                    if search(v): return True
+                elif type(v) is type([]):
+                    if [vv for vv in v if search(vv)]: return True
+                elif type(v) is type(''):
+                    if q in v: return True
+            return False
+        return search(trx)
+
+
+class DateFilter(object):
+    """Make a filter for text searching.
+
+    >>> s = DateFilter("1994-12-31")
+    >>> t = trxtsv.TestData()
+    >>> [tx['trx']['date'] for tx in t if s(tx)]
+    ['1/1/00', '1/1/00', '1/2/00', '1/3/00', '1/3/00', '1/3/00', '1/3/00']
+    """
+    def __init__(self, when):
+        self._when = when
+
+    def __call__(self, trx):
+        return isoDate(trx['trx']['date']) > self._when
 
 
 class FileKB(object):
