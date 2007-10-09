@@ -20,14 +20,57 @@ __version__ = '$Id: grokTrx.py,v 1.15 2006/03/06 05:40:45 connolly Exp $'
 
     
 import XMLWriter # from swap http://www.w3.org/2002/12/cal/
-from trxtsv import eachFile, isoDate, numField, amt
-
+from trxtsv import readHeader, readFooter, eachTrx, isoDate, numField, amt
+from trxtsv import progress
 
 def main(argv):
     xwr = XMLWriter.T(sys.stdout)
     sink = TrxSink(xwr)
     eachFile(argv[1:], sink)
 
+
+def eachFile(files, sink, filter=None):
+    """Iterate over selected transactions in the files and send them to
+    the sink.
+
+    :param files: a list of files containing reports as above
+
+    :param sink: something with header(), transaction(), and close() methods.
+
+    :param filter: a function from (trxdata, splits) to t/f
+
+    The transaction method gets called a la: sink.transaction(trxdata, splits).
+    See eachTrx() for the structure of trxdata and splits.
+
+    The sink.transaction method is like a SPARQL describe hit.
+
+    @@TODO: document header() method.
+    """
+    sink.startDoc()
+    
+    rtot = None
+    rdate = None
+    
+    for fn in files:
+        lines = file(fn)
+
+        fieldNames, dt, bal = readHeader(lines)
+        progress("header:" , fn, fieldNames, dt, bal)
+        if rdate and dt <> rdate:
+            raise IOError, "expected date " + rdate + " but got " + dt
+        if rtot and bal <> rtot:
+            raise IOError, "expected balance " + rtot + " but got " + bal
+        sink.header(fieldNames, fn, dt, bal)
+	r = []
+	for trx in eachTrx(lines, r):
+	    if filter is None or filter(trx):
+		sink.transaction(trx['trx'], trx['splits'])
+        ln = r[0]
+        foot = readFooter(lines, ln)
+        progress("footer: ", fn, foot)
+        dummy, (rdate, rtot), dummy, dummy, dummy = foot
+    
+    sink.close()
 
 class Namespace:
     def __init__(self, n):
@@ -169,7 +212,7 @@ class TrxSink:
 
 	   
 def _test():
-    import doctest, grokTrx
+    import doctest
     return doctest.testmod()
 
 if __name__ == '__main__':
