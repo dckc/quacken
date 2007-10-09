@@ -6,7 +6,7 @@ XSLTPROC=xsltproc
 OWLSQL=../owlsql
 
 
-qdb.py: qdb.owl $(OWLSQL)/owl2django.xsl
+qfm/models.py: qdb.owl $(OWLSQL)/owl2django.xsl
 	$(XSLTPROC) --novalid -o $@ $(OWLSQL)/owl2django.xsl qdb.owl
 
 qdb.sql: qdb.owl $(OWLSQL)/owl2sql.xsl

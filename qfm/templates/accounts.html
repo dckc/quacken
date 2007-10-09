@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <title>Accounts</title>
+</head>
+<body>
+<ul>
+{% for a in accounts %}
+<li><a href="account/{a.id}">{{a.name}}</a></li>
+{% endfor %}
+</ul>
+
+<hr />
+<address>
+qfm by Dan Connolly Oct 2007
+</address>
+</body>
+</html>
