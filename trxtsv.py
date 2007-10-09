@@ -5,7 +5,8 @@ trxtsv -- read quicken transaction reports
 Usage
 -----
 
-The main methods are is eachFile() and eachTrx().
+The main methods are is trxiter() and eachTrx().
+See qdbload.py for normalization and SQL integration.
 
 A transaction is a JSON_-like dict:
 
@@ -24,8 +25,6 @@ See isoDate(), num(), and amt() for some of the field formats.
 
 Future Work
 -----------
-
-  - support database loading, a la normalizeQData.py
 
   - investigate diff/patch, sync with DB; flag ambiguous transactions
 
@@ -80,6 +79,11 @@ Date	Account	Num	Description	Memo	Category	Clr	Amount
 """
 _TestLines = TestString.split("\n")
 
+def TestData():
+    d = iter(_TestLines)
+    readHeader(d)
+    return eachTrx(d, [])
+
 def trxiter(files, filter=None):
     """Iterate over selected transactions in the files,
     a bit like SPARQL describe.
@@ -115,49 +119,6 @@ def trxiter(files, filter=None):
         progress("footer: ", fn, foot)
         dummy, (rdate, rtot), dummy, dummy, dummy = foot
 
-
-def eachFile(files, sink, filter=None):
-    """Iterate over selected transactions in the files and send them to
-    the sink.
-
-    :param files: a list of files containing reports as above
-
-    :param sink: something with header(), transaction(), and close() methods.
-
-    :param filter: a function from (trxdata, splits) to t/f
-
-    The transaction method gets called a la: sink.transaction(trxdata, splits).
-    See eachTrx() for the structure of trxdata and splits.
-
-    The sink.transaction method is like a SPARQL describe hit.
-
-    @@TODO: document header() method.
-    """
-    sink.startDoc()
-    
-    rtot = None
-    rdate = None
-    
-    for fn in files:
-        lines = file(fn)
-
-        fieldNames, dt, bal = readHeader(lines)
-        progress("header:" , fn, fieldNames, dt, bal)
-        if rdate and dt <> rdate:
-            raise IOError, "expected date " + rdate + " but got " + dt
-        if rtot and bal <> rtot:
-            raise IOError, "expected balance " + rtot + " but got " + bal
-        sink.header(fieldNames, fn, dt, bal)
-	r = []
-	for trx in eachTrx(lines, r):
-	    if filter is None or filter(trx):
-		sink.transaction(trx['trx'], trx['splits'])
-        ln = r[0]
-        foot = readFooter(lines, ln)
-        progress("footer: ", fn, foot)
-        dummy, (rdate, rtot), dummy, dummy, dummy = foot
-    
-    sink.close()
 
 def readHeader(lines):
     """
@@ -331,125 +292,6 @@ def readFooter(lines, ln):
         
     return total, balance, inflows, outflows, nettot
 
-
-class AndFilter:
-    def __init__(self, a, b):
-	self._parts = (a, b)
-
-    def __call__(self, arg):
-	for p in self._parts:
-	    if not p(arg):
-		return False
-	return True
-
-class OrFilter:
-    def __init__(self, *args):
-	self._parts = args
-
-    def __call__(self, arg):
-	for p in self._parts:
-	    if p(arg):
-		return True
-	return False
-
-class PathFilter:
-    """Make a filter function from a class name.
-
-    We're simulating::
-
-      describe ?TRX where { ... ?TRX qt:split [ qs:class "9912mit-misc"] }.
-
-   where the ... is another filter, given by the f param.
-
-    >>> f=PathFilter('9912mit-misc', ('splits', '*', 'class')); \
-    trx={'trx': {'date': '1/7/94', 'acct': 'Texans Checks', 'num': '1237', \
-    'memo': 'Albertsons'}, \
-    'splits': [{'cat': 'Home', 'clr': 'R', 'amt': '-17.70'}]}; \
-    f(trx)
-    False
-
-    >>> f=PathFilter('9912mit-misc', ('splits', '*', 'class')); \
-    trx={'trx': {'date': '1/3/00', 'acct': 'Citi Visa HI', \
-    'memo': '3Com/Palm Computing 888-956-7256'}, \
-    'splits': [{'memo': '@@reciept?Palm IIIx replacement (phone order 3 Jan)',\
-    'acct': 'MIT 97', 'class': '9912mit-misc', 'clr': 'R', \
-    'amt': '-100.00'}]}; \
-    f(trx)
-    True
-
-    >>> f=PathFilter('Citi Visa HI', ('trx', 'acct')); \
-    trx={'trx': {'date': '1/3/00', 'acct': 'Citi Visa HI', \
-    'memo': '3Com/Palm Computing 888-956-7256'}, \
-    'splits': [{'memo': '@@reciept?Palm IIIx replacement (phone order 3 Jan)',\
-    'acct': 'MIT 97', 'class': '9912mit-misc', 'clr': 'R', \
-    'amt': '-100.00'}]}; \
-    f(trx)
-    True
-
-    """
-    def __init__(self, v, path):
-	self._v = v
-	self._path = path
-
-    def __call__(self, trx):
-        v = self._v
-
-        def pathTest(r, path):
-            if len(path) == 1:
-                return r.get(path[0], None) == v
-            else:
-                if path[0] == '*':
-                    for i in r:
-                        if pathTest(i, path[1:]):
-                            return True
-                else:
-                    r = r.get(path[0], None)
-                    if r:
-                        return pathTest(r, path[1:])
-                return False
-
-	return pathTest(trx, self._path)
-
-
-class SearchFilter(object):
-    """Make a filter for text searching.
-
-    >>> s = SearchFilter("Tex")
-    >>> d=iter(_TestLines); dummy=readHeader(d); t=eachTrx(d, [])
-    >>> [tx['trx']['date'] for tx in t if s(tx)]
-    ['1/7/94', '1/7/94', '1/1/00', '1/2/00', '1/3/00']
-    """
-    def __init__(self, q):
-        self._q = q
-
-    def __call__(self, trx):
-        q = self._q
-        
-        def search(d):
-            for k, v in d.iteritems():
-                if type(v) is type({}):
-                    if search(v): return True
-                elif type(v) is type([]):
-                    if [vv for vv in v if search(vv)]: return True
-                elif type(v) is type(''):
-                    if q in v: return True
-            return False
-        return search(trx)
-
-
-class DateFilter(object):
-    """Make a filter for text searching.
-
-    >>> s = DateFilter("1994-12-31")
-    >>> d=iter(_TestLines); dummy=readHeader(d); t=eachTrx(d, [])
-    >>> [tx['trx']['date'] for tx in t if s(tx)]
-    ['1/1/00', '1/1/00', '1/2/00', '1/3/00', '1/3/00', '1/3/00', '1/3/00']
-    """
-    def __init__(self, when):
-        self._when = when
-
-    def __call__(self, trx):
-        return isoDate(trx['trx']['date']) > self._when
 
 def isoDate(dt):
     """convert quicken date format to XML date format
