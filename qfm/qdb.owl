@@ -34,6 +34,18 @@
         <owl:allValuesFrom r:resource="#Account"/>
       </owl:Restriction>
     </s:subClassOf>
+    <s:subClassOf>
+      <owl:Restriction>
+        <owl:onProperty>
+          <owl:DataTypeProperty r:about="#kind">
+            <s:range r:resource="http://www.w3.org/2001/XMLSchema#string"/>
+            <s:comment>AL=asset/liability (what quicken calls an "account") or
+IE = income/expense ("category")</s:comment>
+          </owl:DataTypeProperty>
+        </owl:onProperty>
+        <owl:cardinality r:datatype="http://www.w3.org/2001/XMLSchema#integer">1</owl:cardinality>
+      </owl:Restriction>
+    </s:subClassOf>
   </owl:Class>
   <owl:Class r:ID="Job">
     <s:label>Job</s:label>

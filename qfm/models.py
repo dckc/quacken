@@ -10,6 +10,8 @@ class Account(models.Model):
  
     parent = models.ForeignKey('self', null=True)
  
+    kind = models.CharField(maxlength=80, null=True)
+ 
 
     class Admin:
         pass
