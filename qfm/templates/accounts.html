@@ -4,9 +4,12 @@
   <title>Accounts</title>
 </head>
 <body>
+<h1>Asset/Liability Accounts</h1>
 <ul>
 {% for a in accounts %}
-<li><a href="account/{a.id}">{{a.name}}</a></li>
+<li>
+  <a href="{%url dm93data.qfm.views.register a.id %}">{{a.name|escape}}</a>
+</li>
 {% endfor %}
 </ul>
 

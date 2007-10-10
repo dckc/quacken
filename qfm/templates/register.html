@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <title>{{account.name|escape}} Register</title>
+<style>
+.amt { text-align: right }
+</style>
+</head>
+<body>
+<h1>{{account.name|escape}}</h1>
+
+<table border="1">
+{% for t in transactions %}
+
+<tbody class="vevent">
+ <tr class="trx">
+  <td class="dtstart">{{t.date}}</td>
+  <td class="vcard">
+   <strong class="fn">{{t.payee|escape}}</strong>
+  </td>
+  <td>&nbsp;</td>
+  <td>{{t.acct.name|escape}}</td>
+  <td class="amt">{{t.amount|floatformat:2}}</td>
+  <td class="amt">{{t.balance|floatformat:2}}</td>
+ </tr>
+
+{% for s in t.split_set.all %}
+ <tr class="split">
+  <td>&nbsp;</td>
+  <td>{{s.memo|default_if_none:""|escape}}</td>
+  <td>{{s.clr|default_if_none:"&#160;"}}</td>
+  <td>
+{%ifequal s.acct.kind "AL"%}[{{s.acct.name|escape}}]{%endifequal%}
+{%ifnotequal s.acct.kind "AL"%}{{s.acct.name|escape}}{%endifnotequal%}
+{%if s.job %}/{{s.job.name|escape}}{%endif%}</td>
+  <td class="amt">{{s.subtot|floatformat:2}}</td>
+ </tr>
+{% endfor %}
+</tbody>
+{% endfor %}
+</table>
+
+<hr />
+<address>
+qfm by Dan Connolly Oct 2007
+</address>
+</body>
+</html>

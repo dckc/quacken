@@ -47,7 +47,7 @@ def main(args):
 
     txs = trxiter(args)
     normalize(txs, db)
-
+    account_settings(db)
 
 def normalize(txs, db):
     # running ids for transactions, splits
@@ -95,6 +95,18 @@ def normalize(txs, db):
         tid += 1
     db.commit()
 
+def account_settings(db):
+    """Any account with an associated transaction is an asset/liability.
+    Others are income/expense accounts.
+    """
+    db.execute('update %(prefix)saccount '
+               'set kind="AL" '
+               'where exists (select id from %(prefix)stransaction '
+               'where qfm_transaction.acct_id = %(prefix)saccount.id)')
+    db.execute('update %(prefix)saccount '
+               'set kind="IE" '
+               'where kind is null')
+    db.commit()
 
 class NameTable(object, DictMixin):
     def __init__(self, name):
@@ -165,6 +177,11 @@ class SQLiteDB(object):
         cur = self._cx.cursor()
         cur.execute(asSQL(t, fields), row)
 
+    def execute(self, s):
+        s = s % {'prefix': self._pfx}
+        cur = self._cx.cursor()
+        cur.execute(s)
+        
     def commit(self):
         self._cx.commit()
 
