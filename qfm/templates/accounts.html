@@ -2,16 +2,33 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
   <title>Accounts</title>
+<style type="text/css">
+.num { text-align: right }
+</style>
 </head>
 <body>
 <h1>Asset/Liability Accounts</h1>
-<ul>
+<table border="1">
+<thead>
+<th>Latest</th>
+<th>Account</th>
+<th>#</th>
+</tr>
+</thead>
+<tbody>
 {% for a in accounts %}
-<li>
-  <a href="{%url dm93data.qfm.views.register a.id %}">{{a.name|escape}}</a>
-</li>
+<tr>
+  <td><tt>{{a.modified|date:"M-d-Y"}}</tt></td>
+  <td>{{a.name|escape}}</td>
+  <td class="num">
+    <a href="{%url dm93data.qfm.views.register a.id %}">
+      {{ a.transaction_set.count }}
+    </a>
+  </td>
+</tr>
 {% endfor %}
-</ul>
+</tbody>
+</table>
 
 <hr />
 <address>

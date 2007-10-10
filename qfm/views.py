@@ -5,7 +5,13 @@ from django.shortcuts import render_to_response
 from dm93data.qfm.models import Account, Transaction
 
 def accounts(request):
-    accounts = Account.objects.filter(kind="AL").order_by('name')
+    accounts = Account.objects.filter(kind="AL")
+    for a in accounts:
+        tx = a.transaction_set.latest('date')
+        a.modified = tx.date
+    def byDate(a):
+        return a.modified
+    accounts = sorted(accounts, key=byDate, reverse=True)
     return render_to_response('accounts.html',
                               {'accounts': accounts})
 
