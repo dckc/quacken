@@ -1,15 +1,14 @@
 {% load financial %}							
 Date	Account	Num	Description	Memo	Category	Clr	Amount
 							
-			BALANCE {{ frm|date:"d/M/y" }}				0.00
+			BALANCE {{ frm|date:"n/j/y" }}				0.00
 							
-{% for t in transactions %}
-{{ t.date|date:"d/M/y" }}	{{ t.acct.name }}	@@num	{{ t.payee }}	{% for s in t.split_set.all %}{%ifequal s.acct.kind "AL"%}[{{s.acct.name|escape}}]{%endifequal%}{%ifnotequal s.acct.kind "AL"%}{{s.acct.name|escape}}{%endifnotequal%}{%if s.job %}/{{s.job.name|escape}}{%endif%}	{{ s.clr }} {{ s.subtot|currency }}
+{% for t in transactions %}{{ t.date|date:"n/j/y" }}	{{ t.acct.name }}	{{ t.ty|default_if_none:"" }}{{ t.num|default_if_none:"" }}{% ifnotequal t.split_set.count 1 %}        S{% endifnotequal %}	{{ t.payee|default_if_none:"" }}	{% for s in t.split_set.all %}{% if not forloop.first %}				{% endif %}{{ s.memo|default_if_none:"" }}	{%ifequal s.acct.kind "AL"%}[{{s.acct.name}}]{%endifequal%}{%ifnotequal s.acct.kind "AL"%}{{s.acct.name}}{%endifnotequal%}{%if s.job %}/{{s.job.name}}{%endif%}	{{ s.clr|default_if_none:"" }} {{ s.subtot|currency }}
 {% endfor %}{% endfor %}
 
-			TOTAL {{ frm|date:"d/M/y" }} - {{ frm|date:"d/M/y" }}				@@
+			TOTAL {{ frm|date:"n/j/y" }} - {{ frm|date:"n/j/y" }}				@@
 							
-			BALANCE {{ frm|date:"d/M/y" }}				@@
+			BALANCE {{ frm|date:"n/j/y" }}				@@
 							
 							
 			TOTAL INFLOWS				@@
