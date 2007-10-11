@@ -1,3 +1,21 @@
+"""financial - currency filter for django
+
+This is quick-n-dirty; works with floats.
+
+For a more complete implementation, see...
+http://www.satchmoproject.com/trac/browser/satchmo/trunk/satchmo/shop/templatetags/currency_filter.py?rev=689
+and
+http://docs.python.org/lib/decimal-recipes.html
+
+Note also
+  Currency Fields with newforms
+  http://www.djangosnippets.org/snippets/176/
+
+and decimal support in django
+ http://code.djangoproject.com/ticket/200 fixed 2007-05-20
+ http://code.djangoproject.com/changeset/5302
+"""
+
 def currency(value, args=""):
     """
     >>> currency(-11400.01)
