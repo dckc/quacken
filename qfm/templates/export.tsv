@@ -1,0 +1,18 @@
+{% load financial %}							
+Date	Account	Num	Description	Memo	Category	Clr	Amount
+							
+			BALANCE {{ frm|date:"d/M/y" }}				0.00
+							
+{% for t in transactions %}
+{{ t.date|date:"d/M/y" }}	{{ t.acct.name }}	@@num	{{ t.payee }}	{% for s in t.split_set.all %}{%ifequal s.acct.kind "AL"%}[{{s.acct.name|escape}}]{%endifequal%}{%ifnotequal s.acct.kind "AL"%}{{s.acct.name|escape}}{%endifnotequal%}{%if s.job %}/{{s.job.name|escape}}{%endif%}	{{ s.clr }} {{ s.subtot|currency }}
+{% endfor %}{% endfor %}
+
+			TOTAL {{ frm|date:"d/M/y" }} - {{ frm|date:"d/M/y" }}				@@
+							
+			BALANCE {{ frm|date:"d/M/y" }}				@@
+							
+							
+			TOTAL INFLOWS				@@
+			TOTAL OUTFLOWS				@@
+							
+			NET TOTAL				@@

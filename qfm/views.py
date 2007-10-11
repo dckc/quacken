@@ -1,8 +1,12 @@
 # based on
 # http://www.djangoproject.com/documentation/0.96/tutorial03/
 
+import datetime
+
 from django.shortcuts import render_to_response
 from dm93data.qfm.models import Account, Transaction
+from django.http import HttpResponse
+from django.template import loader
 
 def accounts(request):
     accounts = Account.objects.filter(kind="AL")
@@ -29,3 +33,21 @@ def register(request, acct_id):
                               {'account': account,
                                'balance': bal,
                                'transactions': transactions})
+
+def asDate(s):
+    y = int(s[:4])
+    m = int(s[5:7])
+    d = int(s[8:10])
+    return datetime.date(y, m, d)
+
+def export(request):
+    frm, to = asDate(request.GET['from']), asDate(request.GET['to'])
+    transactions = Transaction.objects.filter(date__range=(frm, to)) \
+                   .order_by('date')
+    body = loader.render_to_string('export.tsv',
+                                   {'transactions': transactions,
+                                    'frm': frm,
+                                    'to': to
+                                    })
+    return HttpResponse(body, mimetype="text/plain")
+
