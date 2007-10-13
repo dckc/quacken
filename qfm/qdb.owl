@@ -54,7 +54,7 @@ IE = income/expense ("category")</s:comment>
         <owl:onProperty>
           <owl:DataTypeProperty r:about="#id">
             <s:range r:resource="http://www.w3.org/2001/XMLSchema#integer"/>
-            <s:comment/>
+            <s:comment>aka class</s:comment>
           </owl:DataTypeProperty>
         </owl:onProperty>
         <owl:cardinality r:datatype="http://www.w3.org/2001/XMLSchema#integer">1</owl:cardinality>
@@ -142,9 +142,9 @@ IE = income/expense ("category")</s:comment>
     <s:subClassOf>
       <owl:Restriction>
         <owl:onProperty>
-          <owl:DataTypeProperty r:about="#memo">
+          <owl:DataTypeProperty r:about="#s">
             <s:range r:resource="http://www.w3.org/2001/XMLSchema#string"/>
-            <s:comment/>
+            <s:comment>split flag. mostly redundant, but needed for round-trip testing</s:comment>
           </owl:DataTypeProperty>
         </owl:onProperty>
         <owl:cardinality r:datatype="http://www.w3.org/2001/XMLSchema#integer">1</owl:cardinality>
@@ -210,7 +210,9 @@ IE = income/expense ("category")</s:comment>
         <owl:onProperty>
           <owl:DataTypeProperty r:about="#memo">
             <s:range r:resource="http://www.w3.org/2001/XMLSchema#string"/>
-            <s:comment/>
+            <s:comment>Quicken has a per-transaction memo as well as
+a per-split memo, but it doesn't show up in the transaction
+report.</s:comment>
           </owl:DataTypeProperty>
         </owl:onProperty>
         <owl:cardinality r:datatype="http://www.w3.org/2001/XMLSchema#integer">1</owl:cardinality>
@@ -235,7 +237,7 @@ IE = income/expense ("category")</s:comment>
         <owl:onProperty>
           <owl:DataTypeProperty r:about="#id">
             <s:range r:resource="http://www.w3.org/2001/XMLSchema#integer"/>
-            <s:comment/>
+            <s:comment>not yet used</s:comment>
           </owl:DataTypeProperty>
         </owl:onProperty>
         <owl:cardinality r:datatype="http://www.w3.org/2001/XMLSchema#integer">1</owl:cardinality>

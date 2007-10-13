@@ -65,13 +65,13 @@ def normalize(txs, db):
         tx = trx['trx']
         db.insert(txw,
                   # django adds _id to ref fields
-                  ('id', 'acct_id', 'date', 'payee', 'num', 'ty', 'memo'),
+                  ('id', 'acct_id', 'date', 'payee', 'num', 'ty', 's'),
                   (tid, accounts[tx['acct']],
                    isoDate(tx['date']),
                    tx.get('payee', None),
                    tx.get('num', None),
                    tx.get('ty', None),
-                   tx.get('memo', None)
+                   tx.get('s', None)
                    ))
         
         for split in trx['splits']:

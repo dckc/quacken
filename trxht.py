@@ -287,9 +287,7 @@ def trxdetails(txs):
 
         tx["dtstart"] = dtstart
 
-        num, splitflag, trxty = numField(tx.get('num', ''))
-        tx['num'] = num
-        tx['ty'] = trxty
+        tx['num'], tx['s'], tx['ty'] = numField(tx.get('num', ''))
 
         yield t
 

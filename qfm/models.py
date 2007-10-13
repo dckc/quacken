@@ -43,7 +43,7 @@ class Transaction(models.Model):
  
     ty = models.CharField(maxlength=80, null=True)
  
-    memo = models.CharField(maxlength=80, null=True)
+    s = models.CharField(maxlength=80, null=True)
  
 
     class Admin:
