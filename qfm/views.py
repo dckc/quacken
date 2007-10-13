@@ -40,14 +40,58 @@ def asDate(s):
     d = int(s[8:10])
     return datetime.date(y, m, d)
 
+
+def balances(frm, to):
+    from django.db import connection
+    cursor = connection.cursor()
+
+    splitSum = "SELECT sum(qfm_Split.subtot) FROM qfm_Transaction, qfm_Split" \
+                " WHERE qfm_Split.trx_id = qfm_Transaction.id "
+    cursor.execute(splitSum +
+                   " AND qfm_Transaction.date < %s", [frm])
+    bal_in = cursor.fetchone()[0] or 0.0
+
+    cursor.execute(splitSum +
+                   " AND qfm_Transaction.date <= %s", [to])
+    bal_out = cursor.fetchone()[0]
+
+    cursor.execute(splitSum +
+                   " AND qfm_Split.subtot > 0"
+                   " AND qfm_Transaction.date >= %s"
+                   " AND qfm_Transaction.date <= %s", [frm, to])
+    inflows = cursor.fetchone()[0]
+
+    cursor.execute(splitSum +
+                   " AND qfm_Split.subtot < 0"
+                   " AND qfm_Transaction.date >= %s"
+                   " AND qfm_Transaction.date <= %s", [frm, to])
+    outflows = cursor.fetchone()[0]
+
+    cursor.execute(splitSum +
+                   " AND qfm_Transaction.date >= %s"
+                   " AND qfm_Transaction.date <= %s", [frm, to])
+    net = cursor.fetchone()[0]
+
+    return bal_in, inflows, outflows, net, bal_out
+
+
 def export(request):
     frm, to = asDate(request.GET['from']), asDate(request.GET['to'])
     transactions = Transaction.objects.filter(date__range=(frm, to)) \
                    .order_by('date')
+
+    bal_in, inflows, outflows, net, bal_out = balances(frm, to)
+
     body = loader.render_to_string('export.tsv',
                                    {'transactions': transactions,
+                                    'frm_1': frm - datetime.timedelta(1),
                                     'frm': frm,
-                                    'to': to
+                                    'to': to,
+                                    'bal_in': bal_in,
+                                    'inflows': inflows,
+                                    'outflows': outflows,
+                                    'net': net,
+                                    'bal_out': bal_out
                                     })
     return HttpResponse(body, mimetype="text/plain")
 
