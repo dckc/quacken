@@ -2,37 +2,93 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
   <title>{{account.name|escape}} Register</title>
-<style>
+<style type="text/css">
+/* TODO: figure out /media/; move style there */
+
 .amt { text-align: right }
+
+/*
+ * cribbed from Project 03 in
+ * Eric Meyer on Css: Mastering the Language of Web Design
+ * New Riders 2002
+ * http://more.ericmeyeroncss.com/projects/03/
+ */
+h2, h3 {margin: 0; border: 1px solid gray;}
+h2 {border-width: 0 0 0 1px; padding: 0 0 0 0.25em}
+h3 {border-width: 1px 1px 0 0; padding: 0.1em 0.33em;}
+table {width: 100%;}
+
+th, td { padding: 0 0.5em;
+  border-bottom: 1px solid #DDD;}
+
+.amt, .ref {font: small Verdana, "Andale Mono", Courier, "Courier New", 
+  monospace;}
+
+thead th {vertical-align: bottom; border: 1px solid gray;
+  border-width: 0 1px 1px 0;
+  white-space: normal;}
+th {border-right: 1px solid gray; border-bottom-style: dotted;
+  white-space: nowrap;}
+
+td {letter-spacing: -1px;}
+
+/* light green */
+/* background: #CEC; */
+
+td.bal { border-bottom-color: white;
+  border-right: 1px solid gray;}
+td.bal {font-weight: bold; border-bottom: 1px solid gray;}
+
+td.neg {background: #FF3; color: red;}
+
+
+tr.totals td.profit {border: 1px solid black;}
+
+tr.totals th {border-bottom-style: solid;}
+</style>
+<style type="text/css" media="screen">
+table tr.odd * {background: #EEE;}
+tr.odd *, tr.even * {border-bottom: 1px solid #EEE;}
+td {border-right: 1px solid #CCC;}
+td.profit, td.neg {color: #000; background: #FFF;}
+td.profit {font-weight: bold;}
+td.neg {font-style: italic;}
 </style>
 </head>
 <body>
 <h1>{{account.name|escape}}</h1>
 
-<table border="1">
+<table cellspacing="0">
+<thead>
+<tr>
+ <th>Date</th>
+ <th colspan="2">Payee/Category/Memo</th>
+ <th>Clr</th>
+ <th>Amount</th>
+ <th>Balance</th>
+</tr>
+</thead>
 {% for t in transactions %}
 
 <tbody class="vevent">
  <tr class="trx">
   <td class="dtstart">{{t.date}}</td>
-  <td class="vcard">
+  <td class="vcard" colspan="2">
    <strong class="fn">{{t.payee|escape}}</strong>
   </td>
   <td>&nbsp;</td>
-  <td>{{t.acct.name|escape}}</td>
-  <td class="amt">{{t.amount|floatformat:2}}</td>
-  <td class="amt">{{t.balance|floatformat:2}}</td>
+  <td class="amt trx">{{t.amount|floatformat:2}}</td>
+  <td class="amt bal"
+    >{{t.balance|floatformat:2}}</td>
  </tr>
 
 {% for s in t.split_set.all %}
  <tr class="split">
   <td>&nbsp;</td>
+  <td class="ref">
+{%ifequal s.acct.kind "AL"%}[{{s.acct.name|escape}}]{%endifequal%}{%ifnotequal s.acct.kind "AL"%}{{s.acct.name|escape}}{%endifnotequal%}{%if s.job %}/{{s.job.name|escape}}{%endif%}</td>
   <td>{{s.memo|default_if_none:""|escape}}</td>
   <td>{{s.clr|default_if_none:"&#160;"}}</td>
-  <td>
-{%ifequal s.acct.kind "AL"%}[{{s.acct.name|escape}}]{%endifequal%}
-{%ifnotequal s.acct.kind "AL"%}{{s.acct.name|escape}}{%endifnotequal%}
-{%if s.job %}/{{s.job.name|escape}}{%endif%}</td>
   <td class="amt">{{s.subtot|floatformat:2}}</td>
  </tr>
 {% endfor %}
