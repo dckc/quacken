@@ -280,9 +280,6 @@ def trxdetails(txs):
         if m:
             dtstart = "%sT%s" % (dtstart, m.group(1))
             memo = memo[m.end(0):]
-            for s in t["splits"]:
-                if s.get("memo", '') == tx["memo"]:
-                    s["memo"] = memo
             tx["memo"] = memo
 
         tx["dtstart"] = dtstart
