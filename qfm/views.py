@@ -67,12 +67,7 @@ def balances(frm, to):
                    " AND qfm_Transaction.date <= %s", [frm, to])
     outflows = cursor.fetchone()[0]
 
-    cursor.execute(splitSum +
-                   " AND qfm_Transaction.date >= %s"
-                   " AND qfm_Transaction.date <= %s", [frm, to])
-    net = cursor.fetchone()[0]
-
-    return bal_in, inflows, outflows, net, bal_out
+    return bal_in, inflows, outflows, bal_out
 
 
 def export(request):
@@ -80,7 +75,7 @@ def export(request):
     transactions = Transaction.objects.filter(date__range=(frm, to)) \
                    .order_by('date')
 
-    bal_in, inflows, outflows, net, bal_out = balances(frm, to)
+    bal_in, inflows, outflows, bal_out = balances(frm, to)
 
     body = loader.render_to_string('export.tsv',
                                    {'transactions': transactions,
@@ -90,7 +85,7 @@ def export(request):
                                     'bal_in': bal_in,
                                     'inflows': inflows,
                                     'outflows': outflows,
-                                    'net': net,
+                                    'net': inflows + outflows,
                                     'bal_out': bal_out
                                     })
     return HttpResponse(body, mimetype="text/plain")
