@@ -3,7 +3,8 @@ Date	Account	Num	Description	Memo	Category	Clr	Amount
 							
 			BALANCE {{ frm_1|date:"n/j/y" }}				{{ bal_in|currency }}
 							
-{% for t in transactions %}{{ t.date|date:"n/j/y" }}	{{ t.acct.name }}	{{ t.ty|default_if_none:"" }}{{ t.num|default_if_none:"" }}{% ifequal t.s "S" %}        S{% endifequal %}	{{ t.payee|default_if_none:"" }}	{% for s in t.split_set.all %}{% if not forloop.first %}				{% endif %}{{ s.memo|default_if_none:"" }}	{%ifequal s.acct.kind "AL"%}[{{s.acct.name}}]{%endifequal%}{%ifnotequal s.acct.kind "AL"%}{{s.acct.name}}{%endifnotequal%}{%if s.job %}/{{s.job.name}}{%endif%}	{{ s.clr|default_if_none:"" }} {{ s.subtot|currency }}
+{% for t in transactions %}{{ t.date|date:"n/j/y" }}	{{ t.acct.name }}	{{ t.ty|default_if_none:"" }}{{ t.num|default_if_none:"" }}{% ifequal t.s "S" %}        S{% endifequal %}	{{ t.payee|default_if_none:"" }}	{% for s in t.split_set.all %}{%if not forloop.first %}				{% endif %}{{ s.memo|default_if_none:"" }}	{%ifequal s.acct.kind "AL"%}[{{s.acct.name}}]{%endifequal%}{%ifnotequal s.acct.kind "AL"%}{{s.acct.name}}{%endifnotequal%}{#
+%}{%if s.job %}/{{s.job.name}}{%endif%}	{{ s.clr|default_if_none:"" }}	{{ s.subtot|currency }}
 {% endfor %}{% endfor %}
 			TOTAL {{ frm|date:"n/j/y" }} - {{ to|date:"n/j/y" }}				{{ net|currency }}
 							
@@ -13,4 +14,4 @@ Date	Account	Num	Description	Memo	Category	Clr	Amount
 			TOTAL INFLOWS				{{ inflows|currency }}
 			TOTAL OUTFLOWS				{{ outflows|currency }}
 							
-			NET TOTAL				{{ bal_out|currency }}
+			NET TOTAL				{{ net|currency }}
