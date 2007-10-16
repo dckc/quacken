@@ -5,6 +5,7 @@ urlpatterns = patterns('',
     (r'^$', 'dm93data.qfm.views.accounts'),
     (r'^register/(?P<acct_id>\d+)', 'dm93data.qfm.views.register'),
     (r'^export', 'dm93data.qfm.views.export'),
+    (r'^api/categories/', 'dm93data.qfm.views.category_choices'),
 )
 
 if settings.DEBUG:

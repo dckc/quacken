@@ -3,6 +3,27 @@
 <head>
   <title>{{account.name|escape}} Register</title>
   <link rel="stylesheet" href="{{ MEDIA_URL }}finance.css" />
+
+  <!-- yui http://www.djangosnippets.org/snippets/392/
+       http://developer.yahoo.com/yui/autocomplete/
+    -->
+     <link rel="stylesheet" type="text/css" href="{{ MEDIA_URL }}yui/autocomplete/assets/skins/sam/autocomplete.css" />
+	<!-- Dependencies --> 
+	<script type="text/javascript" src="{{ MEDIA_URL }}yui/yahoo-dom-event/yahoo-dom-event.js"></script> 
+	 
+	<!-- OPTIONAL: Connection (required only if using XHR DataSource) --> 
+	<script type="text/javascript" src="{{ MEDIA_URL }}yui/connection/connection-min.js"></script> 
+	 
+	<!-- OPTIONAL: Animation (required only if enabling animation) --> 
+	<script type="text/javascript" src="{{ MEDIA_URL }}yui/animation/animation-min.js"></script> 
+	 
+	<!-- OPTIONAL: External JSON parser from http://www.json.org/ (enables JSON validation) -->
+	<script type="text/javascript" src="http://www.json.org/json.js"></script>
+	 
+	<!-- Source file --> 
+	<script type="text/javascript" src="{{ MEDIA_URL }}yui/autocomplete/autocomplete-min.js"></script> 
+    <!-- /yui-->
+
 </head>
 <body>
 <h1>{{account.name|escape}}</h1>
@@ -44,6 +65,16 @@
 </tbody>
 {% endfor %}
 </table>
+
+
+<form action="{{ account.get_absolute_url }}" method="post">
+<hr /><h3>Transaction form@@</h3>
+<ul>
+  {{ txform.as_ul }}
+</ul>
+<hr />
+</form>
+
 
 <hr />
 <address>

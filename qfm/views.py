@@ -8,6 +8,10 @@ from dm93data.qfm.models import Account, Transaction
 from django.http import HttpResponse
 from django.template import loader, RequestContext
 from django.utils import simplejson
+from django import newforms as forms
+from django.core.urlresolvers import reverse
+
+from widgets import AutoCompleteWidget
 
 def accounts(request):
     accounts = Account.objects.filter(kind="AL")
@@ -30,6 +34,16 @@ def media_too(request):
     from django.conf import settings
     return RequestContext(request, {"MEDIA_URL": settings.MEDIA_URL})
 
+class TransactionForm(forms.Form):
+    category = forms.CharField()
+
+    def __init__(self, *args, **kwargs):
+        super(TransactionForm, self).__init__(*args, **kwargs)
+        # cribbed from http://www.djangosnippets.org/snippets/392/
+        w = self.fields['category'].widget = AutoCompleteWidget()
+        w.lookup_url = reverse('dm93data.qfm.views.category_choices')
+        w.schema = '["choices", "name"]' 
+
 def register(request, acct_id):
     account = Account.objects.get(id=int(acct_id))
     transactions = account.transaction_set.all()
@@ -44,7 +58,8 @@ def register(request, acct_id):
     return render_to_response('register.html',
                               {'account': account,
                                'balance': bal,
-                               'transactions': transactions},
+                               'transactions': transactions,
+                               'txform': TransactionForm()},
                               context_instance=media_too(request)
                               )
 
@@ -110,3 +125,19 @@ def export(request):
                                     })
     return HttpResponse(body, mimetype="text/plain")
 
+def category_choices(request):
+    # http://www.djangosnippets.org/snippets/392/
+    # http://developer.yahoo.com/yui/autocomplete/
+    #http://superb-west.dl.sourceforge.net/sourceforge/yui/yui_2.3.1.zip
+    hint = request.GET.get('query', '')
+    accts = Account.objects.filter(kind="IE", name__istartswith = hint)
+    return JsonResponse({'choices': [ {'id': a.id,
+                                       'name': a.name}
+                                      for a in accts]})
+
+
+class JsonResponse(HttpResponse):
+    # cribbed from http://www.djangosnippets.org/snippets/154/
+    def __init__(self, object):
+        content = simplejson.dumps(object)
+        super(JsonResponse, self).__init__(content, mimetype='application/json')
