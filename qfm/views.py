@@ -41,31 +41,37 @@ def asDate(s):
     return datetime.date(y, m, d)
 
 
-def balances(frm, to):
+def scalarq(query, params):
+    """execute a query (e.g. SELECT sum(...) ...) and return the sole result
+    """
     from django.db import connection
     cursor = connection.cursor()
 
+    cursor.execute(query, params)
+    return cursor.fetchone()[0]
+
+
+def balances(frm, to):
+    # Hmm... including the qfm_ prefix here seems ugly,
+    # but I can't find any alternative in the Django Database API
+    # http://www.djangoproject.com/documentation/db-api/
     splitSum = "SELECT sum(qfm_Split.subtot) FROM qfm_Transaction, qfm_Split" \
-                " WHERE qfm_Split.trx_id = qfm_Transaction.id "
-    cursor.execute(splitSum +
-                   " AND qfm_Transaction.date < %s", [frm])
-    bal_in = cursor.fetchone()[0] or 0.0
+               " WHERE qfm_Split.trx_id = qfm_Transaction.id "
+    bal_in = scalarq(splitSum +
+                     " AND qfm_Transaction.date < %s", [frm]) or 0.0
 
-    cursor.execute(splitSum +
-                   " AND qfm_Transaction.date <= %s", [to])
-    bal_out = cursor.fetchone()[0]
+    bal_out = scalarq(splitSum +
+                      " AND qfm_Transaction.date <= %s", [to])
 
-    cursor.execute(splitSum +
-                   " AND qfm_Split.subtot > 0"
-                   " AND qfm_Transaction.date >= %s"
-                   " AND qfm_Transaction.date <= %s", [frm, to])
-    inflows = cursor.fetchone()[0]
+    inflows = scalarq(splitSum +
+                      " AND qfm_Split.subtot > 0"
+                      " AND qfm_Transaction.date >= %s"
+                      " AND qfm_Transaction.date <= %s", [frm, to])
 
-    cursor.execute(splitSum +
-                   " AND qfm_Split.subtot < 0"
-                   " AND qfm_Transaction.date >= %s"
-                   " AND qfm_Transaction.date <= %s", [frm, to])
-    outflows = cursor.fetchone()[0]
+    outflows = scalarq(splitSum +
+                       " AND qfm_Split.subtot < 0"
+                       " AND qfm_Transaction.date >= %s"
+                       " AND qfm_Transaction.date <= %s", [frm, to])
 
     return bal_in, inflows, outflows, bal_out
 
