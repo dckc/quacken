@@ -6,7 +6,8 @@ import datetime
 from django.shortcuts import render_to_response
 from dm93data.qfm.models import Account, Transaction
 from django.http import HttpResponse
-from django.template import loader
+from django.template import loader, RequestContext
+from django.utils import simplejson
 
 def accounts(request):
     accounts = Account.objects.filter(kind="AL")
@@ -17,7 +18,17 @@ def accounts(request):
         return a.modified
     accounts = sorted(accounts, key=byDate, reverse=True)
     return render_to_response('accounts.html',
-                              {'accounts': accounts})
+                              {'accounts': accounts},
+                              context_instance=media_too(request)
+                              )
+
+
+def media_too(request):
+    # django 0.96 doesn't yet have django.core.context_processors.media
+    # so we do it manually..
+
+    from django.conf import settings
+    return RequestContext(request, {"MEDIA_URL": settings.MEDIA_URL})
 
 def register(request, acct_id):
     account = Account.objects.get(id=int(acct_id))
@@ -29,10 +40,13 @@ def register(request, acct_id):
         bal += amount
         t.amount = amount
         t.balance = bal
+
     return render_to_response('register.html',
                               {'account': account,
                                'balance': bal,
-                               'transactions': transactions})
+                               'transactions': transactions},
+                              context_instance=media_too(request)
+                              )
 
 def asDate(s):
     y = int(s[:4])
