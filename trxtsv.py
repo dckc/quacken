@@ -62,9 +62,10 @@ Date	Account	Num	Description	Memo	Category	Clr	Amount
 1/1/00	Discover HI		Pizza Hut		Fun:Dining	R	-22.58
 1/2/00	Texans Checks	4196	Northwest Fellowship		Charity	R	-125.00
 1/3/00	Texans Checks	EFT	Nationwide	prepared DEC 08	Auto:Insurance	R	-66.09
-1/3/00	Citi Visa HI		3Com/Palm Computing 888-956-7256	@@reciept?Palm IIIx replacement (phone order 3 Jan)	[MIT 97]/9912mit-misc	R	-100.00
+1/3/00	Citi Visa HI		3Com/Palm Computing 888-956-7256	reciept?Palm IIIx replacement (phone order 3 Jan)	[MIT 97]/9912mit-misc	R	-100.00
 1/3/00	Discover HI		ALBERTSON'S #40 391401 AUSTIN TX		Home	R	-14.46
 1/3/00	MIT 97		3Com/Palm Computing 888-956-7256	Palm IIIx replacement (phone order 3 Jan)	[Citi Visa HI]/9912mit-misc		100.00
+2/25/08	MIT 2000	515	McCracken Shuttle	05:15 shuttle home  to	MCI	[D Wallet]/200802tag-yvr	c	50.00
 							
 			TOTAL 1/1/90 - 12/31/96				51,488.91
 							
@@ -78,6 +79,9 @@ Date	Account	Num	Description	Memo	Category	Clr	Amount
 
 """
 _TestLines = TestString.split("\n")
+_TestEncoding = ['1/4/08	Visa2773		APL*ITUNES 866-712-7753 CA	C\xe9line	Fun:Media	R	-0.99',
+'			TOTAL 1/1/90 - 12/31/96				51,488.91'
+]
 
 def TestData():
     d = iter(_TestLines)
@@ -144,41 +148,50 @@ def readHeader(lines):
     return fieldNames, dt, a
 
 
-def eachTrx(lines, result):
+def eachTrx(lines, result, encoding="iso8859-1"):
     """Turn an iterator over lines into an interator over transactions.
 
     >>> d=iter(_TestLines); dummy=readHeader(d); t=eachTrx(d, []); len(list(t))
-    11
+    12
 
     >>> from pprint import pformat as _pf; \
     d=iter(_TestLines); dummy=readHeader(d); t=eachTrx(d, []); \
     print _pf(_sr(t.next()))
     [('splits',
-      [[('L', 'Home'), ('cat', 'Home'), ('clr', 'R'), ('subtot', '-17.70')]]),
+      [[('L', u'Home'), ('cat', u'Home'), ('clr', u'R'), ('subtot', u'-17.70')]]),
      ('trx',
-      [('acct', 'Texans Checks'),
-       ('date', '1/7/94'),
-       ('num', '1237'),
-       ('payee', 'Albertsons')])]
+      [('acct', u'Texans Checks'),
+       ('date', u'1/7/94'),
+       ('num', u'1237'),
+       ('payee', u'Albertsons')])]
 
 
     >>> from pprint import pformat as _pf; \
     d=iter(_TestLines); dummy=readHeader(d); t=eachTrx(d, []); \
     print _pf(_sr(list(t)[8]))
     [('splits',
-      [[('L', '[MIT 97]/9912mit-misc'),
-        ('acct', 'MIT 97'),
-        ('class', '9912mit-misc'),
-        ('clr', 'R'),
-        ('memo', '@@reciept?Palm IIIx replacement (phone order 3 Jan)'),
-        ('subtot', '-100.00')]]),
+      [[('L', u'[MIT 97]/9912mit-misc'),
+        ('acct', u'MIT 97'),
+        ('class', u'9912mit-misc'),
+        ('clr', u'R'),
+        ('memo', u'reciept?Palm IIIx replacement (phone order 3 Jan)'),
+        ('subtot', u'-100.00')]]),
      ('trx',
-      [('acct', 'Citi Visa HI'),
-       ('date', '1/3/00'),
-       ('memo', '@@reciept?Palm IIIx replacement (phone order 3 Jan)'),
-       ('payee', '3Com/Palm Computing 888-956-7256')])]
+      [('acct', u'Citi Visa HI'),
+       ('date', u'1/3/00'),
+       ('memo', u'reciept?Palm IIIx replacement (phone order 3 Jan)'),
+       ('payee', u'3Com/Palm Computing 888-956-7256')])]
 
 
+    # grok tabs in memo; normalize spaces
+    >>> d=iter(_TestLines); dummy=readHeader(d); t=eachTrx(d, []); \
+    list(t)[11]['trx']['memo']
+    u'05:15 shuttle home  to\\tMCI'
+
+    # quicken encodes &eacute; as \xe9
+    >>> d=iter(_TestEncoding); t=eachTrx(d, []); \
+    len(list(t)[0]['trx']['memo'])
+    6
 
     """
 
@@ -191,7 +204,8 @@ def eachTrx(lines, result):
             raise IOError, 'unexpected end-of-lines'
         if ln.endswith("\r\n"): ln = ln[:-2]
         elif ln.endswith("\n"): ln = ln[:-1]
-        fields = ln.split('\t')
+        ln = ln.decode(encoding)
+        fields = splitline(ln)
 
 	#progress("fields", fields)
         if fields[0]:
@@ -210,6 +224,19 @@ def eachTrx(lines, result):
                     trx['splits'].append(fixSplit(mkRecord(SplitCols,
                                                            fields[4:])))
 
+
+TestLine='2/25/08	MIT 2000	515	McCracken Shuttle	05:15 shuttle home  to	MCI	[D Wallet]/200802tag-yvr	c	50.00'
+
+def splitline(ln):
+    """handle tabs in memo
+
+    >>> len(splitline(TestLine))
+    8
+    """
+
+    p1 = ln.split('\t', 4)
+    p2 = p1[-1].rsplit('\t', 3)
+    return p1[:-1] + p2
 
 def mkRecord(keys, fields):
     """
@@ -343,8 +370,6 @@ def numField(num):
 
 
 def progress(*args):
-    """@@ print statements should be replaced by unit tests
-    """
     import sys
     for a in args:
         sys.stderr.write(str(a) + ' ')

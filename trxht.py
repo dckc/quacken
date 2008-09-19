@@ -126,7 +126,7 @@ def main(argv):
 
     kb = FileKB(args[1:])
     for s in kb.generate(template=tpl, criteria=criteria, filter=filter):
-	sys.stdout.write(s)
+	sys.stdout.write(s.encode('utf-8'))
     
 
 
