@@ -1,6 +1,8 @@
 # based on
 # http://www.djangoproject.com/documentation/0.96/tutorial03/
 
+# TODO: Use case: dining calendar. Fun:dining category in hCalendar with times
+
 import datetime
 
 from django.shortcuts import render_to_response
@@ -39,7 +41,7 @@ class TransactionForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super(TransactionForm, self).__init__(*args, **kwargs)
-        # cribbed from http://www.djangosnippets.org/snippets/392/
+        # cribbed from 
         w = self.fields['category'].widget = AutoCompleteWidget()
         w.lookup_url = reverse('dm93data.qfm.views.category_choices')
         w.schema = '["choices", "name"]' 
