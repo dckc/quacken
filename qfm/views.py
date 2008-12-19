@@ -10,21 +10,19 @@ from dm93data.qfm.models import Account, Transaction
 from django.http import HttpResponse
 from django.template import loader, RequestContext
 from django.utils import simplejson
-from django import newforms as forms
+from django import forms
 from django.core.urlresolvers import reverse
+
+from django.db import connection
 
 from widgets import AutoCompleteWidget
 
 def accounts(request):
-    accounts = Account.objects.filter(kind="AL")
-    for a in accounts:
-        tx = a.transaction_set.latest('date')
-        a.modified = tx.date
-    def byDate(a):
-        return a.modified
-    accounts = sorted(accounts, key=byDate, reverse=True)
+    accounts = Account.objects.filter(kind="AL") \
+	.order_by('name')
     return render_to_response('accounts.html',
-                              {'accounts': accounts},
+                              {'accounts': accounts,
+			       'queries': connection.queries},
                               context_instance=media_too(request)
                               )
 

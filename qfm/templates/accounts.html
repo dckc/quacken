@@ -6,28 +6,21 @@
 </head>
 <body>
 <h1>Asset/Liability Accounts</h1>
-<table cellspacing="0" summary="Account Listing">
-<thead>
-<tr>
-<th>Latest</th>
-<th>Account</th>
-<th>#</th>
-</tr>
-</thead>
-<tbody>
+
+<ul>
 {% for a in accounts %}
-<tr>
-  <td><tt>{{a.modified|date:"M-d-Y"}}</tt></td>
-  <td>{{a.name|escape}}</td>
-  <td class="num">
-    <a href="{%url dm93data.qfm.views.register a.id %}">
-      {{ a.transaction_set.count }}
-    </a>
-  </td>
-</tr>
+<li>
+  <a href="{%url dm93data.qfm.views.register a.id %}">{{a.name|escape}}</a>
+</li>
 {% endfor %}
-</tbody>
-</table>
+</ul>
+
+<div><h2>Colophon: SQL details</h2>
+<p><tt>
+{{queries}}
+</tt>
+</p>
+</div>
 
 <hr />
 <address>

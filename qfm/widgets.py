@@ -3,9 +3,9 @@
 # August 27, 2007
 # http://www.djangosnippets.org/snippets/392/
 
-from django import newforms as forms
-from django.newforms.util import smart_unicode
-from django.newforms.widgets import TextInput,flatatt
+from django import forms
+from django.forms.util import smart_unicode
+from django.forms.widgets import TextInput,flatatt
 from django.utils.html import escape
 
 class AutoCompleteField(TextInput):
