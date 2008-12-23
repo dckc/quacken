@@ -45,10 +45,13 @@ class TransactionForm(forms.Form):
         w.schema = '["choices", "name"]' 
 
 def register(request):
-    acct_id, when = int(request.GET['acct']), asDate(request.GET['date_start'])
+    acct_id, ds, de = int(request.GET['acct']), \
+	asDate(request.GET['date_start']), \
+	asDate(request.GET['date_end'])
     account = Account.objects.get(id=acct_id)
-    bal = account.balance(when)
-    transactions = account.transaction_set.filter(date__gte = when)
+    bal = account.balance(ds)
+    transactions = account.transaction_set.filter(date__gte = ds,
+						  date__lt = de)
     for t in transactions:
         splits = t.split_set.all()
         amount = sum([s.subtot for s in splits])
