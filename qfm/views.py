@@ -4,7 +4,6 @@
 # TODO: Use case: dining calendar. Fun:dining category in hCalendar with times
 
 import datetime
-from decimal import Decimal
 
 from django.shortcuts import render_to_response
 from django.http import HttpResponse
@@ -20,12 +19,36 @@ from widgets import AutoCompleteWidget
 def accounts(request):
     accounts = Account.objects.filter(kind="AL") \
 	.order_by('name')
+    categories = Account.objects.filter(kind="IE") \
+	.order_by('name')
     return render_to_response('accounts.html',
                               {'accounts': accounts,
+			       'categories': categories,
 			       'queries': connection.queries},
                               context_instance=media_too(request)
                               )
 
+
+def networth(request):
+    de = asDate(request.GET['date_end'])
+    report = request.GET['report']
+    acct_ids = [int(a) for a in request.GET.getlist('accts')]
+    accounts = Account.objects.filter(pk__in = acct_ids) \
+	.order_by('name')
+    tot = 0
+    for a in accounts:
+	b = a.balance(de)
+	a.bal = b
+	tot += b
+    return render_to_response('report.html',
+                              {'date_end': de,
+			       'report': report,
+			       'accounts': accounts,
+			       'total': tot,
+			       'queries': connection.queries,
+                               },
+                              context_instance=media_too(request)
+                              )
 
 def media_too(request):
     # django 0.96 doesn't yet have django.core.context_processors.media

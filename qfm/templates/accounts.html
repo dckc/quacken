@@ -8,26 +8,62 @@
 
 <h1>Personal Finances</h1>
 
-<div><h2>Open Register</h2>
-<form action="register">
+<div><h2>Net Worth</h2>
 
+<form action="networth">
+<div>
+Report: <input name="report" value="Net Worth" />
+Accounts: <select name="accts" multiple="multiple">
+{% for a in accounts %}
+<option value="{{a.id}}">{{ a.name }}</option>
+{% endfor %}
+</select>
+
+As of: <input type="text" name="date_end" value="yyyy-mm-dd" />
+<input type="submit" value="Report"/>
+</div>
+</form>
+
+</div>
+
+<hr />
+<div><h2>Open Register</h2>
+
+<form action="register">
 <div>Account: <select name="acct">
 {% for a in accounts %}
 <option value="{{a.id}}">{{ a.name }}</option>
 {% endfor %}
 </select>
-</form>
 
 <input type="text" name="date_start" value="yyyy-mm-dd" />
 <input type="text" name="date_end" value="yyyy-mm-dd" />
 <input type="submit" value="Open"/>
 </div>
+</form>
+
+<hr />
+
+<div><h2>Expense Account Report</h2>
+
+<form action="expense">
+<div>Account: <select name="cat">
+{% for c in categories %}
+<option value="{{c.id}}">{{ c.name }}</option>
+{% endfor %}
+</select>
+
+<input type="text" name="date_start" value="yyyy-mm-dd" />
+<input type="text" name="date_end" value="yyyy-mm-dd" />
+<input type="submit" value="Report"/>
+</div>
+</form>
 
 <hr />
 
 <div><h2>Export</h2>
-<form action="export">
 
+<form action="export">
 <div>
 <input type="text" name="from" value="yyyy-mm-dd" />
 <input type="text" name="to" value="yyyy-mm-dd" />

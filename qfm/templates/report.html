@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% load financial %}
+
+{% block title %}{{ report }}{% endblock %}
+
+{% block body %}
+
+<h1>{{ report }}<br />
+as of {{ date_end }}</h1>
+
+<table cellspacing="0" summary="Account Balances">
+<thead>
+<tr>
+<th>Account</th>
+<th>Balance</th>
+</tr>
+</thead>
+<tbody>
+{% for a in accounts %}
+<tr>
+  <td>{{a.name}}</td>
+  <td class="num"> {{ a.bal|currency }}</td>
+</tr>
+{% endfor %}
+<tfoot>
+<tr><th>Total:</th><td class="num">{{ total|currency}}</td></tr>
+</tfoot>
+</tbody>
+</table>
+
+{% endblock body %}

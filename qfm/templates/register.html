@@ -11,6 +11,8 @@
 <body>
 <h1>{{account.name}}</h1>
 
+{% load financial %}
+
 <table cellspacing="0">
 <thead>
 <tr>
@@ -30,9 +32,9 @@
    <strong class="fn">{{t.payee}}</strong>
   </td>
   <td>&nbsp;</td>
-  <td class="amt trx">{{t.amount|floatformat:2}}</td>
+  <td class="amt trx">{{t.amount|currency}}</td>
   <td class="amt bal"
-    >{{t.balance|floatformat:2}}</td>
+    >{{t.balance|currency}}</td>
  </tr>
 
 {% for s in t.split_set.all %}
