@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-  <title>{{account.name|escape}} Register</title>
+  <title>{{account.name}} Register</title>
   <link rel="stylesheet" href="{{ MEDIA_URL }}finance.css" />
 
 	<!-- Source file --> 
@@ -9,7 +9,7 @@
 
 </head>
 <body>
-<h1>{{account.name|escape}}</h1>
+<h1>{{account.name}}</h1>
 
 <table cellspacing="0">
 <thead>
@@ -27,7 +27,7 @@
  <tr class="trx">
   <td class="dtstart">{{t.date}}</td>
   <td class="vcard" colspan="2">
-   <strong class="fn">{{t.payee|escape}}</strong>
+   <strong class="fn">{{t.payee}}</strong>
   </td>
   <td>&nbsp;</td>
   <td class="amt trx">{{t.amount|floatformat:2}}</td>
@@ -39,8 +39,8 @@
  <tr class="split">
   <td>&nbsp;</td>
   <td class="ref">
-{%ifequal s.acct.kind "AL"%}[{{s.acct.name|escape}}]{%endifequal%}{%ifnotequal s.acct.kind "AL"%}{{s.acct.name|escape}}{%endifnotequal%}{%if s.job %}/{{s.job.name|escape}}{%endif%}</td>
-  <td>{{s.memo|default_if_none:""|escape}}</td>
+{%ifequal s.acct.kind "AL"%}[{{s.acct.name}}]{%endifequal%}{%ifnotequal s.acct.kind "AL"%}{{s.acct.name}}{%endifnotequal%}{%if s.job %}/{{s.job.name}}{%endif%}</td>
+  <td>{{s.memo|default_if_none:""}}</td>
   <td>{{s.clr|default_if_none:"&#160;"}}</td>
   <td class="amt">{{s.subtot|floatformat:2}}</td>
  </tr>

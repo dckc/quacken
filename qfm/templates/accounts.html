@@ -10,7 +10,7 @@
 <ul>
 {% for a in accounts %}
 <li>
-  <a href="{%url dm93data.qfm.views.register a.id %}">{{a.name|escape}}</a>
+  <a href="{%url dm93data.qfm.views.register a.id %}">{{a.name}}</a>
 </li>
 {% endfor %}
 </ul>
@@ -20,7 +20,7 @@
 
 <div>Account: <select name="acct">
 {% for a in accounts %}
-<option value="{{a.id}}">{{ a.name|escape }}</option>
+<option value="{{a.id}}">{{ a.name }}</option>
 {% endfor %}
 </select>
 </form>
