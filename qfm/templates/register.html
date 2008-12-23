@@ -50,13 +50,15 @@
 </table>
 
 
-<form action="{{ account.get_absolute_url }}" method="post">
-<hr /><h3>Transaction form@@</h3>
+<div><h2>Colophon: SQL details</h2>
+
 <ul>
-  @@ txform.as_ul }}
+ {% for q in queries %}
+ <li><tt>{{q.sql}}</tt><br />{{q.time}} seconds</li>
+ {% endfor %}
 </ul>
-<hr />
-</form>
+
+</div>
 
 <hr />
 <address>

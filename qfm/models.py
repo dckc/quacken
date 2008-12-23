@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models, connection
 
 class Account(models.Model):
     id = models.AutoField(primary_key=True)
@@ -12,6 +12,25 @@ class Account(models.Model):
  
     kind = models.CharField(max_length=80, null=True)
  
+
+    def balance(self, when):
+	"""get account balance as of YYYY-MM-DD
+	"""
+	# based on snippet 242
+	# see also django ticket #3566 re aggregates
+	cursor = connection.cursor()
+	tables = dict([(x._meta.object_name, x._meta.db_table)
+		       for x in Account, Transaction, Split])
+	cmd = """select sum(subtot)
+	         from %(Split)s, %(Transaction)s, %(Account)s
+		 where %(Split)s .trx_id = %(Transaction)s .id
+		 and %(Transaction)s .acct_id = %(Account)s .id
+		 and %(Account)s .id = %%s
+		 and %(Transaction)s . date < %%s
+	""" % tables
+	cursor.execute(cmd, (self.id, when))
+	balrow = cursor.fetchone()
+	return balrow[0] or 0
 
     class Admin:
         pass

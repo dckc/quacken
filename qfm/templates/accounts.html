@@ -15,11 +15,29 @@
 {% endfor %}
 </ul>
 
+<div><h2>Open Register</h2>
+<form action="register">
+
+<div>Account: <select name="acct">
+{% for a in accounts %}
+<option value="{{a.id}}">{{ a.name|escape }}</option>
+{% endfor %}
+</select>
+</form>
+
+<input type="text" name="date_start" value="yyyy-mm-dd" />
+<input type="text" name="date_end" value="yyyy-mm-dd" />
+<input type="submit" value="Open"/>
+</div>
+
 <div><h2>Colophon: SQL details</h2>
-<p><tt>
-{{queries}}
-</tt>
-</p>
+
+<ul>
+ {% for q in queries %}
+ <li><tt>{{q.sql}}</tt><br />{{q.time}} seconds</li>
+ {% endfor %}
+</ul>
+
 </div>
 
 <hr />
