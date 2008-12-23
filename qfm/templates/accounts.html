@@ -5,15 +5,8 @@
   <link rel="stylesheet" href="{{ MEDIA_URL }}finance.css" />
 </head>
 <body>
-<h1>Asset/Liability Accounts</h1>
 
-<ul>
-{% for a in accounts %}
-<li>
-  <a href="{%url dm93data.qfm.views.register a.id %}">{{a.name}}</a>
-</li>
-{% endfor %}
-</ul>
+<h1>Personal Finances</h1>
 
 <div><h2>Open Register</h2>
 <form action="register">
@@ -30,25 +23,17 @@
 <input type="submit" value="Open"/>
 </div>
 
+<hr />
+
 <div><h2>Export</h2>
 <form action="export">
 
 <div>
 <input type="text" name="from" value="yyyy-mm-dd" />
 <input type="text" name="to" value="yyyy-mm-dd" />
-<input type="submit" value="Open"/>
+<input type="submit" value="Export"/>
 </div>
 </form>
-
-<div><h2>Colophon: SQL details</h2>
-
-<ul>
- {% for q in queries %}
- <li><tt>{{q.sql}}</tt><br />{{q.time}} seconds</li>
- {% endfor %}
-</ul>
-
-</div>
 
 <hr />
 <address>
