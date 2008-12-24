@@ -4,6 +4,7 @@ from django.conf import settings
 urlpatterns = patterns('',
     (r'^$', 'dm93data.qfm.views.accounts'),
     (r'^networth', 'dm93data.qfm.views.networth'),
+    (r'^expenses', 'qfm.views.expenses'),
     (r'^register', 'dm93data.qfm.views.register'),
     (r'^register/(?P<acct>\d+)', 'dm93data.qfm.views.register'),
     (r'^export', 'dm93data.qfm.views.export'),

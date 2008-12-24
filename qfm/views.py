@@ -13,7 +13,7 @@ from django import forms
 from django.core.urlresolvers import reverse
 from django.db import connection
 
-from dm93data.qfm.models import Account, Transaction
+from dm93data.qfm.models import Account, Transaction, Split
 from widgets import AutoCompleteWidget
 
 def accounts(request):
@@ -50,6 +50,30 @@ def networth(request):
                               context_instance=media_too(request)
                               )
 
+def expenses(request):
+    report = request.GET['report']
+    cat_ids = [int(c) for c in request.GET.getlist('cat')]
+    ds, de = asDate(request.GET['date_start']), \
+	asDate(request.GET['date_end'])
+
+    cats = Account.objects.filter(pk__in = cat_ids)
+
+    splits = Split.objects.filter(acct__in = cats,
+				  trx__date__gte = ds,
+				  trx__date__lt = de).order_by('trx__date')
+    tot = sum([s.subtot for s in splits])
+
+    return render_to_response('expenses.html',
+                              {'date_start': ds,
+			       'date_end': de,
+			       'report': report,
+			       'splits': splits,
+			       'total': tot,
+			       'queries': connection.queries,
+                               },
+                              context_instance=media_too(request)
+                              )
+    
 def media_too(request):
     # django 0.96 doesn't yet have django.core.context_processors.media
     # so we do it manually..

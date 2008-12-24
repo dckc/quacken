@@ -8,7 +8,7 @@
 
 <h1>Personal Finances</h1>
 
-<div><h2>Net Worth</h2>
+<div><h2>Account Balances</h2>
 
 <form action="networth">
 <div>
@@ -20,6 +20,26 @@ Accounts: <select name="accts" multiple="multiple">
 </select>
 
 As of: <input type="text" name="date_end" value="yyyy-mm-dd" />
+<input type="submit" value="Report"/>
+</div>
+</form>
+
+</div>
+
+<hr />
+<div><h2>Income and Expenses</h2>
+
+<form action="expenses">
+<div>
+Report: <input name="report" value="Expenses" />
+Categories: <select name="cat" multiple="multiple">
+{% for c in categories %}
+<option value="{{c.id}}">{{ c.name }}</option>
+{% endfor %}
+</select>
+
+from: <input type="text" name="date_start" value="yyyy-mm-dd" />
+to: <input type="text" name="date_end" value="yyyy-mm-dd" />
 <input type="submit" value="Report"/>
 </div>
 </form>
