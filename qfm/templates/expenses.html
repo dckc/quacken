@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% load financial %}
+
+{% block title %}{{ report }}{% endblock %}
+
+{% block body %}
+
+<h1>{{ report }}<br />
+{{ date_start }} to {{ date_end }}</h1>
+
+<table cellspacing="0" summary="Matching Transactions">
+<thead>
+<tr>
+<th>Date</th>
+<th>Account</th>
+<th>Payee</th>
+<th>Category</th>
+<th>Memo</th>
+<th>Amount</th>
+</tr>
+</thead>
+<tbody>
+{% for s in splits %}
+<tr>
+  <td>{{s.trx.date}}</td>
+  <td>{{s.trx.acct.name}}</td>
+  <td>{{s.trx.payee}}</td>
+  <td>{{s.acct.name}}</td>
+  <td>{{s.memo}}</td>
+  <td class="num"> {{ s.subtot|currency }}</td>
+</tr>
+{% endfor %}
+<tfoot>
+<tr><th colspan="5">Total:</th><td class="num">{{ total|currency}}</td></tr>
+</tfoot>
+</tbody>
+</table>
+
+{% endblock body %}

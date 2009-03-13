@@ -5,29 +5,91 @@
   <link rel="stylesheet" href="{{ MEDIA_URL }}finance.css" />
 </head>
 <body>
-<h1>Asset/Liability Accounts</h1>
-<table cellspacing="0" summary="Account Listing">
-<thead>
-<tr>
-<th>Latest</th>
-<th>Account</th>
-<th>#</th>
-</tr>
-</thead>
-<tbody>
+
+<h1>Personal Finances</h1>
+
+<div><h2>Account Balances</h2>
+
+<form action="networth">
+<div>
+Report: <input name="report" value="Net Worth" />
+Accounts: <select name="accts" multiple="multiple">
 {% for a in accounts %}
-<tr>
-  <td><tt>{{a.modified|date:"M-d-Y"}}</tt></td>
-  <td>{{a.name|escape}}</td>
-  <td class="num">
-    <a href="{%url dm93data.qfm.views.register a.id %}">
-      {{ a.transaction_set.count }}
-    </a>
-  </td>
-</tr>
+<option value="{{a.id}}">{{ a.name }}</option>
 {% endfor %}
-</tbody>
-</table>
+</select>
+
+As of: <input type="text" name="date_end" value="yyyy-mm-dd" />
+<input type="submit" value="Report"/>
+</div>
+</form>
+
+</div>
+
+<hr />
+<div><h2>Income and Expenses</h2>
+
+<form action="expenses">
+<div>
+Report: <input name="report" value="Expenses" />
+Categories: <select name="cat" multiple="multiple">
+{% for c in categories %}
+<option value="{{c.id}}">{{ c.name }}</option>
+{% endfor %}
+</select>
+
+from: <input type="text" name="date_start" value="yyyy-mm-dd" />
+to: <input type="text" name="date_end" value="yyyy-mm-dd" />
+<input type="submit" value="Report"/>
+</div>
+</form>
+
+</div>
+
+<hr />
+<div><h2>Open Register</h2>
+
+<form action="register">
+<div>Account: <select name="acct">
+{% for a in accounts %}
+<option value="{{a.id}}">{{ a.name }}</option>
+{% endfor %}
+</select>
+
+<input type="text" name="date_start" value="yyyy-mm-dd" />
+<input type="text" name="date_end" value="yyyy-mm-dd" />
+<input type="submit" value="Open"/>
+</div>
+</form>
+
+<hr />
+
+<div><h2>Expense Account Report</h2>
+
+<form action="expense">
+<div>Account: <select name="cat">
+{% for c in categories %}
+<option value="{{c.id}}">{{ c.name }}</option>
+{% endfor %}
+</select>
+
+<input type="text" name="date_start" value="yyyy-mm-dd" />
+<input type="text" name="date_end" value="yyyy-mm-dd" />
+<input type="submit" value="Report"/>
+</div>
+</form>
+
+<hr />
+
+<div><h2>Export</h2>
+
+<form action="export">
+<div>
+<input type="text" name="from" value="yyyy-mm-dd" />
+<input type="text" name="to" value="yyyy-mm-dd" />
+<input type="submit" value="Export"/>
+</div>
+</form>
 
 <hr />
 <address>

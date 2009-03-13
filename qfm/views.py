@@ -6,29 +6,74 @@
 import datetime
 
 from django.shortcuts import render_to_response
-from dm93data.qfm.models import Account, Transaction
 from django.http import HttpResponse
 from django.template import loader, RequestContext
 from django.utils import simplejson
-from django import newforms as forms
+from django import forms
 from django.core.urlresolvers import reverse
+from django.db import connection
 
+from dm93data.qfm.models import Account, Transaction, Split
 from widgets import AutoCompleteWidget
 
 def accounts(request):
-    accounts = Account.objects.filter(kind="AL")
-    for a in accounts:
-        tx = a.transaction_set.latest('date')
-        a.modified = tx.date
-    def byDate(a):
-        return a.modified
-    accounts = sorted(accounts, key=byDate, reverse=True)
+    accounts = Account.objects.filter(kind="AL") \
+	.order_by('name')
+    categories = Account.objects.filter(kind="IE") \
+	.order_by('name')
     return render_to_response('accounts.html',
-                              {'accounts': accounts},
+                              {'accounts': accounts,
+			       'categories': categories,
+			       'queries': connection.queries},
                               context_instance=media_too(request)
                               )
 
 
+def networth(request):
+    de = asDate(request.GET['date_end'])
+    report = request.GET['report']
+    acct_ids = [int(a) for a in request.GET.getlist('accts')]
+    accounts = Account.objects.filter(pk__in = acct_ids) \
+	.order_by('name')
+    tot = 0
+    for a in accounts:
+	b = a.balance(de)
+	a.bal = b
+	tot += b
+    return render_to_response('report.html',
+                              {'date_end': de,
+			       'report': report,
+			       'accounts': accounts,
+			       'total': tot,
+			       'queries': connection.queries,
+                               },
+                              context_instance=media_too(request)
+                              )
+
+def expenses(request):
+    report = request.GET['report']
+    cat_ids = [int(c) for c in request.GET.getlist('cat')]
+    ds, de = asDate(request.GET['date_start']), \
+	asDate(request.GET['date_end'])
+
+    cats = Account.objects.filter(pk__in = cat_ids)
+
+    splits = Split.objects.filter(acct__in = cats,
+				  trx__date__gte = ds,
+				  trx__date__lt = de).order_by('trx__date')
+    tot = sum([s.subtot for s in splits])
+
+    return render_to_response('expenses.html',
+                              {'date_start': ds,
+			       'date_end': de,
+			       'report': report,
+			       'splits': splits,
+			       'total': tot,
+			       'queries': connection.queries,
+                               },
+                              context_instance=media_too(request)
+                              )
+    
 def media_too(request):
     # django 0.96 doesn't yet have django.core.context_processors.media
     # so we do it manually..
@@ -46,10 +91,14 @@ class TransactionForm(forms.Form):
         w.lookup_url = reverse('dm93data.qfm.views.category_choices')
         w.schema = '["choices", "name"]' 
 
-def register(request, acct_id):
-    account = Account.objects.get(id=int(acct_id))
-    transactions = account.transaction_set.all()
-    bal = 0.0
+def register(request):
+    acct_id, ds, de = int(request.GET['acct']), \
+	asDate(request.GET['date_start']), \
+	asDate(request.GET['date_end'])
+    account = Account.objects.get(id=acct_id)
+    bal = account.balance(ds)
+    transactions = account.transaction_set.filter(date__gte = ds,
+						  date__lt = de)
     for t in transactions:
         splits = t.split_set.all()
         amount = sum([s.subtot for s in splits])
@@ -57,11 +106,13 @@ def register(request, acct_id):
         t.amount = amount
         t.balance = bal
 
+    #@@ TODO: 'txform': TransactionForm()
     return render_to_response('register.html',
                               {'account': account,
                                'balance': bal,
                                'transactions': transactions,
-                               'txform': TransactionForm()},
+			       'queries': connection.queries,
+                               },
                               context_instance=media_too(request)
                               )
 

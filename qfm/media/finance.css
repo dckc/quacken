@@ -22,6 +22,11 @@ th, td { padding: 0 0.5em;
 thead th {vertical-align: bottom; border: 1px solid gray;
   border-width: 0 1px 1px 0;
   white-space: normal;}
+tfoot th {vertical-align: bottom; border: 1px solid gray;
+  border-width: 1px 0px 1px 0px;
+  white-space: normal;}
+tfoot td { border-width: 1px 1px 0px 0px; border: 1px solid gray;
+       font-weight: bold}
 th {border-right: 1px solid gray; border-bottom-style: dotted;
   white-space: nowrap;}
 
