@@ -24,6 +24,10 @@ from trxtsv import readHeader, readFooter, eachTrx, isoDate, numField, amt
 from trxtsv import progress
 
 def main(argv):
+    import sys
+    import codecs
+    sys.stdout = codecs.getwriter('utf8')(sys.stdout)
+
     xwr = XMLWriter.T(sys.stdout)
     sink = TrxSink(xwr)
     eachFile(argv[1:], sink)
