@@ -1,5 +1,14 @@
-alert("got this far!");
 
+function make_budget_window() {
+    //http://www.quirksmode.org/js/popup.html
+    ugly_but_reportedly_necessary_global = window.open('', 'budget_window',
+						       'height=400, width=600');
+    var d = ugly_but_reportedly_necessary_global.document;
+    d.write("hello world!");
+}
+
+//alert("got this far!");
+make_budget_window();
 
 /*
 Mint.PlanningData.getJson(true, apr);
