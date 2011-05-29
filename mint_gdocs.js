@@ -1,7 +1,23 @@
 
 function make_budget_window(){
     var categories = Mint.CategorySearch.getJson();
+    var current_income = Mint.PlanningData.getJson(true, new Date());
+    var current_spending = Mint.PlanningData.getJson(false, new Date());
 
+    var budget = function(id) {
+	for (i=0; i<current_income.bu.length; i++) {
+	    var b = current_income.bu[i];
+	    if (b.cat == id) {
+		return b;
+	    }
+	}
+	for (i=0; i<current_spending.bu.length; i++) {
+	    var b = current_spending.bu[i];
+	    if (b.cat == id) {
+		return b;
+	    }
+	}
+    }
     //http://www.quirksmode.org/js/popup.html
     ugly_but_reportedly_necessary_global = window.open('', 'budget_window',
 						       'height=400, width=600');
@@ -16,9 +32,43 @@ function make_budget_window(){
 
     mk(b, 'h1').textContent = 'Budget';
     var t = mk(b, 'table');
-    mk(mk(t, 'tr'), 'th').textContent = 'Category';
+    var thead = mk(t, 'tr')
+    mk(thead, 'th').textContent = 'id';
+    mk(thead, 'th').textContent = 'Category';
+    mk(thead, 'th').textContent = 'Subcategory';
+    mk(thead, 'th').textContent = 'Amount';
+    mk(thead, 'th').textContent = 'Budget';
+
+    var docat = function(cat, subcat) {
+	var b, row = mk(t, 'tr');
+	mk(row, 'td').textContent = subcat ? subcat.id : cat.id;
+	mk(row, 'td').textContent = cat.value;
+	if (subcat) {
+	    mk(row, 'td').textContent = subcat.value;
+	    b = budget(subcat.id);
+	    if (!b) {
+		YAHOO.log('no budget for subcat: ' + subcat.value);
+	    }
+	} else {
+	    mk(row, 'td');
+	    b = budget(cat.id);
+	    if (!b) {
+		YAHOO.log('no budget for: ' + cat.value);
+	    }
+	}
+
+	if (b) {
+	    mk(row, 'td').textContent = b.amt;
+	    mk(row, 'td').textContent = b.bgt;
+	}
+    }
+
     categories.forEach(function(cat) {
-	mk(mk(t, 'tr'), 'td').textContent = cat.value;
+	docat(cat);
+	var row = mk(t, 'tr')
+	cat.children.forEach(function(subcat) {
+	    docat(cat, subcat);
+	});
     });
 }
 
