@@ -46,15 +46,9 @@ function make_budget_window(){
 	if (subcat) {
 	    mk(row, 'td').textContent = subcat.value;
 	    b = budget(subcat.id);
-	    if (!b) {
-		YAHOO.log('no budget for subcat: ' + subcat.value);
-	    }
 	} else {
 	    mk(row, 'td');
 	    b = budget(cat.id);
-	    if (!b) {
-		YAHOO.log('no budget for: ' + cat.value);
-	    }
 	}
 
 	if (b) {
