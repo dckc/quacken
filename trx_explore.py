@@ -1,6 +1,7 @@
 import json
 import pprint
 
+import sqlalchemy
 from bunch import Bunch
 
 def explore(fp):
@@ -19,11 +20,25 @@ def explore(fp):
                    for tx in trxs
                    for l in tx.labels])
 
+def explore_db(fn):
+    e = sqlalchemy.create_engine('sqlite:///' + fn)
+    show_tables(e)
+
+
+def show_tables(engine):
+    meta = sqlalchemy.MetaData()
+    meta.reflect(bind=engine)
+    for t in meta.tables:
+        print t
+
 
 def main(argv):
-    fn = argv[1]
-    fp = open(fn)
-    explore(fp)
+    dbfn = argv[1]
+    print "dbfn:", dbfn
+    explore_db(dbfn)
+    #fn = argv[1]
+    #fp = open(fn)
+    #explore(fp)
 
 if __name__ == '__main__':
     import sys
