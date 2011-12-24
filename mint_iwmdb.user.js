@@ -1,14 +1,3 @@
-// http://wiki.greasespot.net/Metadata_Block
-// ==UserScript==
-// @name mint_iwmdb
-// @description Mint: I want my data back
-// @namespace http://www.madmode.com/gmscripts
-// @include https://wwws.mint.com/transaction.event
-// ==/UserScript==
-
-// http://wiki.greasespot.net/Content_Script_Injection
-// http://userscripts.org/scripts/source/100842.user.js
-// function contentEval(source) { ...
 
 function iwmdb(id) {
     alert(location.href);
@@ -19,6 +8,13 @@ function iwmdb(id) {
     btn.addEventListener("click", function(event) {
         alert('IWMDB!');
         alert('$MW: ' + $MW);
+
+	var tl = new $MW.TxnList("transaction-list",{prefix:"transaction-"});
+	$MC.useJson(C.JSON_TRANSACTIONS,
+		    function (trxs){
+			alert('# trxs: ' + trxs.length);
+			ap.setItemsData(trxs);
+		    });
     });
 }
 
