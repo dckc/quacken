@@ -4,7 +4,7 @@ import pprint
 import sqlalchemy
 from sqlalchemy import Column
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.types import Integer, String, Boolean
+from sqlalchemy.types import Integer, String, Boolean, Enum
 
 Base = declarative_base()
 Session = sqlalchemy.orm.sessionmaker()
@@ -25,11 +25,15 @@ def load(fp, engine):
     for o in data:
         s.add(mktrx(o))
     
+    for trx, label, name in [(tx['id'], l['id'], l['name'])
+                             for tx in data
+                             for l in tx['labels']]:
+        s.add(MintTag(trx=trx, label=label, name=name))
+
     s.commit()
 
     pprint.pprint(s.execute('select * from minttrx').fetchall())
-
-    raise NotImplementedError('labels')
+    pprint.pprint(s.execute('select * from minttag').fetchall())
 
 
 def show_labels(data):
@@ -108,6 +112,21 @@ class MintTrx(Base):
     #ruleCategoryId = Column(String)
     #ruleMerchant = Column(String)
     #txnType = Column(String)
+
+
+class MintAcct(Base):
+    __tablename__ = 'mintacct'
+    id = Column(Integer, primary_key=True)
+    #kind = Column(Enum('A', 'L', 'I', 'E', 'Q'), primary_key=True)
+    name = Column(String)
+
+
+class MintTag(Base):
+    __tablename__ = 'minttag'
+    id = Column(Integer, primary_key=True)
+    trx = Column(Integer)  # ForeignKey...
+    label = Column(Integer)  # ForeignKey...
+    name = Column(String)
 
 
 def mk_cols():
