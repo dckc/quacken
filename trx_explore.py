@@ -5,28 +5,45 @@ import sqlalchemy
 from sqlalchemy import Column
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.types import Integer, String, Boolean
-from bunch import Bunch
 
 Base = declarative_base()
+Session = sqlalchemy.orm.sessionmaker()
 
 
 def explore(fp):
     data = json.load(fp)
+    all_cols(data)
+    show_labels(data)
 
-    cols = set([k for item in data for k in item.keys()])
-    print "columns"
-    pprint.pprint(cols)
 
-    #trxs = [Bunch.fromDict(o) for o in data]
-    trxs = [mktrx(o) for o in data]                           
+def load(fp, engine):
+    data = json.load(fp)
 
-    trxs.sort(key=lambda(tx): tx.id)
-    pprint.pprint(trxs)
+    Base.metadata.create_all(engine)
+    s = Session(bind=engine)
 
+    for o in data:
+        s.add(mktrx(o))
+    
+    s.commit()
+
+    pprint.pprint(s.execute('select * from minttrx').fetchall())
+
+    raise NotImplementedError('labels')
+
+
+def show_labels(data):
     print "Labels:"
     pprint.pprint([(tx['id'], l['id'], l['name'])
                    for tx in data
                    for l in tx['labels']])
+
+
+def all_cols(data):
+    cols = set([k for item in data for k in item.keys()])
+    print "columns"
+    pprint.pprint(cols)
+
 
 def mktrx(o):
     fields = dict([(str(k), v)  # **args can't be unicode
@@ -35,7 +52,7 @@ def mktrx(o):
 
     amount_num=int(o['amount'].replace('$', '').\
                    replace(',', '').replace('.', '')) \
-                   * (-1 if o['isDebit'] == 'True' else 1)
+                   * (-1 if o['isDebit'] else 1)
                            
     
     return MintTrx(**dict(fields, id=int(o['id']), amount_num=amount_num))
@@ -135,10 +152,11 @@ def main_(argv):
     print "dbfn:", dbfn
     explore_db(dbfn)
 
+
 def main(argv):
-    fn = argv[1]
-    fp = open(fn)
-    explore(fp)
+    trxfn, dbfn = argv[1:3]
+    load(open(trxfn),
+         sqlalchemy.create_engine('sqlite:///' + dbfn))
 
 if __name__ == '__main__':
     import sys
