@@ -111,7 +111,7 @@ class MintTrx(Base):
     #isLinkedToRule = Column(String)
     #isMatched = Column(String)
     isPending = Column(Boolean)
-    #isSpending = Column(String)
+    isSpending = Column(String)
     isTransfer = Column(Boolean)
     #labels = Column(String)
     #manualType = Column(String)
@@ -234,7 +234,8 @@ def match(engine):
 
     ans = engine.execute(
     '''
-    select mtx.date,mtx.omerchant,mtx.category,mtx.amount,mtx.isChild
+    select mtx.date,mtx.omerchant,mtx.category,mtx.amount
+         , mtx.isChild, mtx.isTransfer, mtx.isPending
     from minttrx mtx
     left join catmatch on catmatch.mint_tx_id = mtx.id
     where catmatch.split_guid is null
@@ -251,6 +252,26 @@ def match(engine):
         order by category
         ''')
     log.info('mising categories: %s', pprint.pformat(ans.fetchall()))
+
+    ans = engine.execute('''
+        select ms.date, tx.post_date, tx.description, sp.quantity_num
+             , mtx.amount, mtx.category
+        from (
+          select mtx.date, mtx.date_yymm, mtx.account, sum(mtx.amount_num) tot
+          from minttrx mtx
+          where mtx.isChild = 1
+          group by account, date) ms
+
+        join splits sp on sp.quantity_num = ms.tot
+        join transactions tx on sp.tx_guid = tx.guid
+         and substr(tx.post_date, 5, 4) = ms.date_yymm
+        join accounts acct_old on acct_old.guid = sp.account_guid
+        join minttrx mtx
+          on mtx.date = ms.date
+         and mtx.account = ms.account
+         and mtx.isChild = 1
+        ''')
+    log.info('split matches: %s', pprint.pformat(ans.fetchall()))
 
 
 def main(argv):
