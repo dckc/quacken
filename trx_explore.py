@@ -1,10 +1,13 @@
 import json
 import pprint
+import logging
 
 import sqlalchemy
 from sqlalchemy import Column
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.types import Integer, String, Boolean, Enum
+
+log = logging.getLogger(__name__)
 
 Base = declarative_base()
 Session = sqlalchemy.orm.sessionmaker()
@@ -172,10 +175,43 @@ def main_(argv):
     explore_db(dbfn)
 
 
+def match(engine):
+    Base.metadata.reflect(bind=engine)
+
+    # TODO: consider matching on account id rather than name.
+    # TODO: match on Date rather than merchant?
+
+    ans = engine.execute('''
+        select distinct categoryId as id, category as name
+        from minttrx
+        order by category
+        ''')
+    log.info('categories: %s', pprint.pformat(ans.fetchall()))
+    
+    ans = engine.execute(
+    '''
+    select mtx.id, tx.post_date, tx.description, mtx.omerchant, sp.quantity_num, mtx.date
+    from splits sp
+    join transactions tx on sp.tx_guid = tx.guid
+    join accounts acct on sp.account_guid = acct.guid,
+    minttrx mtx
+    where mtx.account = acct.name
+      and mtx.amount_num = sp.quantity_num
+      and substr(mtx.omerchant, 1, 20) = substr(tx.description, 1, 20)
+    ''')
+    log.info('matches: %s', pprint.pformat(ans.fetchall()))
+
+
 def main(argv):
-    trxfn, dbfn = argv[1:3]
-    load(open(trxfn),
-         sqlalchemy.create_engine('sqlite:///' + dbfn))
+    logging.basicConfig(level=logging.DEBUG)
+
+    if '--load' in argv:
+        trxfn, dbfn = argv[2:4]
+        load(open(trxfn),
+             sqlalchemy.create_engine('sqlite:///' + dbfn))
+    elif '--match' in argv:
+        dbfn = argv[2]
+        match(sqlalchemy.create_engine('sqlite:///' + dbfn))
 
 if __name__ == '__main__':
     import sys
