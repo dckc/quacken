@@ -1,6 +1,7 @@
 import json
 import pprint
 import logging
+import datetime
 
 import sqlalchemy
 from sqlalchemy import Column
@@ -21,6 +22,9 @@ def explore(fp):
 
 def load(fp, engine):
     data = json.load(fp)
+
+    MintTrx.__table__.drop(bind=engine)
+    MintTag.__table__.drop(bind=engine)
 
     Base.metadata.create_all(engine)
     s = Session(bind=engine)
@@ -52,6 +56,8 @@ def all_cols(data):
     pprint.pprint(cols)
 
 
+MONTHS = [datetime.date(2011, m, 1).strftime('%b') for m in range(1, 13)]
+
 def mktrx(o):
     fields = dict([(str(k), v)  # **args can't be unicode
                    for k, v in o.iteritems()
@@ -61,8 +67,12 @@ def mktrx(o):
                    replace(',', '').replace('.', '')) \
                    * (-1 if o['isDebit'] else 1)
                            
-    
-    return MintTrx(**dict(fields, id=int(o['id']), amount_num=amount_num))
+    mmdd = '%02d%s' % (MONTHS.index(o['date'][:3]) + 1,
+                       o['date'][4:7])
+    return MintTrx(**dict(fields,
+                          id=int(o['id']),
+                          date_yymm=mmdd,
+                          amount_num=amount_num))
 
 
 def explore_db(fn):
@@ -88,6 +98,7 @@ class MintTrx(Base):
     category = Column(String)
     categoryId = Column(String)
     date = Column(String)
+    date_yymm = Column(String)
     fi = Column(String)
     #inlineadviceid = Column(String)
     #isAfterFiCreationTime = Column(String)
@@ -179,27 +190,67 @@ def match(engine):
     Base.metadata.reflect(bind=engine)
 
     # TODO: consider matching on account id rather than name.
-    # TODO: match on Date rather than merchant?
 
-    ans = engine.execute('''
-        select distinct categoryId as id, category as name
-        from minttrx
-        order by category
-        ''')
-    log.info('categories: %s', pprint.pformat(ans.fetchall()))
-    
-    ans = engine.execute(
-    '''
-    select mtx.id, tx.post_date, tx.description, mtx.omerchant, sp.quantity_num, mtx.date
+    engine.execute('drop table if exists acctmatch')
+    engine.execute('''
+    create table acctmatch as
+    select sp.guid split_guid, tx.guid tx_guid, mtx.id mint_tx_id
+         , mtx.categoryId, mtx.category
     from splits sp
     join transactions tx on sp.tx_guid = tx.guid
     join accounts acct on sp.account_guid = acct.guid,
     minttrx mtx
     where mtx.account = acct.name
+      and mtx.isChild = 0
       and mtx.amount_num = sp.quantity_num
-      and substr(mtx.omerchant, 1, 20) = substr(tx.description, 1, 20)
+      and substr(tx.post_date, 5, 4) = mtx.date_yymm
     ''')
-    log.info('matches: %s', pprint.pformat(ans.fetchall()))
+#      and substr(mtx.omerchant, 1, 20) = substr(tx.description, 1, 20)
+
+    engine.execute('drop table if exists catmatch')
+    engine.execute('''
+    create table catmatch as
+    select sp.guid split_guid, acct.guid account_guid, acctmatch.mint_tx_id
+    from transactions tx
+    join acctmatch on acctmatch.tx_guid = tx.guid
+    join splits sp on sp.tx_guid = tx.guid and sp.guid != acctmatch.split_guid
+    join accounts acct on acctmatch.category = acct.name
+    ''')
+
+    ans = engine.execute(
+    '''
+    select mtx.date, tx.post_date, tx.description, sp.quantity_num
+         , acct_old.name, acct_new.name
+    from catmatch
+    join splits sp on sp.guid = catmatch.split_guid
+    join transactions tx on sp.tx_guid = tx.guid
+    join accounts acct_old on acct_old.guid = sp.account_guid
+    join accounts acct_new on acct_new.guid = catmatch.account_guid
+    join minttrx mtx on mtx.id = catmatch.mint_tx_id
+    order by tx.post_date
+    ''')
+    rows = ans.fetchall()
+    log.info('matches: %d\n %s', len(rows), pprint.pformat(rows))
+
+    ans = engine.execute(
+    '''
+    select mtx.date,mtx.omerchant,mtx.category,mtx.amount,mtx.isChild
+    from minttrx mtx
+    left join catmatch on catmatch.mint_tx_id = mtx.id
+    where catmatch.split_guid is null
+    order by mtx.id
+    ''')
+    rows = ans.fetchall()
+    log.info('mismatches: %d\n %s', len(rows), pprint.pformat(rows))
+
+    ans = engine.execute('''
+        select distinct categoryId as id, category as name
+        from minttrx mtx
+        left join catmatch on catmatch.mint_tx_id = mtx.id
+        where catmatch.split_guid is null
+        order by category
+        ''')
+    log.info('mising categories: %s', pprint.pformat(ans.fetchall()))
 
 
 def main(argv):
