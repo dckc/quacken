@@ -2,6 +2,7 @@ import json
 import pprint
 import logging
 import datetime
+import warnings
 
 import sqlalchemy
 from sqlalchemy import Column
@@ -82,7 +83,11 @@ def explore_db(fn):
 
 def show_tables(engine):
     meta = sqlalchemy.MetaData()
-    meta.reflect(bind=engine)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("module")
+        # "Did not recognize type 'BIGINT' of column .*")
+        meta.reflect(bind=engine)
     for t in meta.tables:
         print t
 
@@ -187,7 +192,11 @@ def main_(argv):
 
 
 def match(engine):
-    Base.metadata.reflect(bind=engine)
+    with warnings.catch_warnings():
+        #warnings.filterwarnings("once",
+        #                        "Did not recognize type 'BIGINT' of column .*")
+        warnings.simplefilter("ignore")
+        Base.metadata.reflect(bind=engine)
 
     # TODO: consider matching on account id rather than name.
 
@@ -266,10 +275,12 @@ def match(engine):
     left join splitmatch on splitmatch.mint_tx_id = mtx.id
     where catmatch.split_guid is null
       and splitmatch.split_guid is null
+      and mtx.category != 'Exclude From Mint'
+      and mtx.isPending != 1
     order by mtx.id
     ''')
     rows = ans.fetchall()
-    log.info('mismatches: %d\n %s', len(rows), pprint.pformat(rows))
+    log.warn('mismatches: %d\n %s', len(rows), pprint.pformat(rows))
 
     ans = engine.execute('''
         select distinct mtx.categoryId as id, mtx.category as name
@@ -278,13 +289,15 @@ def match(engine):
         left join splitmatch on splitmatch.mint_tx_id = mtx.id
         where catmatch.split_guid is null
           and splitmatch.split_guid is null
+          and mtx.category != 'Exclude From Mint'
+          and mtx.isPending != 1
         order by mtx.category
         ''')
-    log.info('mising categories: %s', pprint.pformat(ans.fetchall()))
+    log.warn('mising categories: %s', pprint.pformat(ans.fetchall()))
 
 
 def main(argv):
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.WARN)
 
     if '--load' in argv:
         trxfn, dbfn = argv[2:4]
