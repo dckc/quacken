@@ -67,8 +67,8 @@ def mktrx(o):
                    replace(',', '').replace('.', '')) \
                    * (-1 if o['isDebit'] else 1)
                            
-    mmdd = '%02d%s' % (MONTHS.index(o['date'][:3]) + 1,
-                       o['date'][4:7])
+    mmdd = '%02d%02d' % (MONTHS.index(o['date'][:3]) + 1,
+                         int(o['date'][4:]))
     return MintTrx(**dict(fields,
                           id=int(o['id']),
                           date_yymm=mmdd,
@@ -232,30 +232,13 @@ def match(engine):
     rows = ans.fetchall()
     log.info('matches: %d\n %s', len(rows), pprint.pformat(rows))
 
-    ans = engine.execute(
-    '''
-    select mtx.date,mtx.omerchant,mtx.category,mtx.amount
-         , mtx.isChild, mtx.isTransfer, mtx.isPending
-    from minttrx mtx
-    left join catmatch on catmatch.mint_tx_id = mtx.id
-    where catmatch.split_guid is null
-    order by mtx.id
-    ''')
-    rows = ans.fetchall()
-    log.info('mismatches: %d\n %s', len(rows), pprint.pformat(rows))
-
-    ans = engine.execute('''
-        select distinct categoryId as id, category as name
-        from minttrx mtx
-        left join catmatch on catmatch.mint_tx_id = mtx.id
-        where catmatch.split_guid is null
-        order by category
-        ''')
-    log.info('mising categories: %s', pprint.pformat(ans.fetchall()))
-
-    ans = engine.execute('''
-        select ms.date, tx.post_date, tx.description, sp.quantity_num
-             , mtx.amount, mtx.category
+    engine.execute('drop table if exists splitmatch')
+    engine.execute('''
+        create table splitmatch as
+        select sp.guid split_guid
+             , mtx.id mint_tx_id
+             , ms.date, tx.post_date, sp.quantity_num
+             , mtx.amount_num, mtx.category
         from (
           select mtx.date, mtx.date_yymm, mtx.account, sum(mtx.amount_num) tot
           from minttrx mtx
@@ -271,7 +254,33 @@ def match(engine):
          and mtx.account = ms.account
          and mtx.isChild = 1
         ''')
+    ans = engine.execute('''select * from splitmatch order by post_date''')
     log.info('split matches: %s', pprint.pformat(ans.fetchall()))
+
+    ans = engine.execute(
+    '''
+    select mtx.date,mtx.omerchant,mtx.category,mtx.amount
+         , mtx.isChild, mtx.isTransfer, mtx.isPending
+    from minttrx mtx
+    left join catmatch on catmatch.mint_tx_id = mtx.id
+    left join splitmatch on splitmatch.mint_tx_id = mtx.id
+    where catmatch.split_guid is null
+      and splitmatch.split_guid is null
+    order by mtx.id
+    ''')
+    rows = ans.fetchall()
+    log.info('mismatches: %d\n %s', len(rows), pprint.pformat(rows))
+
+    ans = engine.execute('''
+        select distinct mtx.categoryId as id, mtx.category as name
+        from minttrx mtx
+        left join catmatch on catmatch.mint_tx_id = mtx.id
+        left join splitmatch on splitmatch.mint_tx_id = mtx.id
+        where catmatch.split_guid is null
+          and splitmatch.split_guid is null
+        order by mtx.category
+        ''')
+    log.info('mising categories: %s', pprint.pformat(ans.fetchall()))
 
 
 def main(argv):
