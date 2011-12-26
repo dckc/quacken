@@ -1,3 +1,15 @@
+'''trx_explore -- migrate Mint transactions to gnucash
+
+.. todo:: migrate notes
+.. todo:: migrate edited descriptions
+
+Things about Mint that I'm likely to miss:
+  - simple, comprehensive search
+  - budget report showing difference
+  - trends by month
+    - not to mention 2d breakdowns from Quicken
+'''
+
 import json
 import pprint
 import logging
