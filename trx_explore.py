@@ -279,10 +279,11 @@ def match(engine):
     engine.execute('drop table if exists splitmatch')
     engine.execute('''
         create table splitmatch as
-        select sp.guid split_guid
+        select ms.date, tx.post_date
+             , sp.quantity_num, mtx.amount_num, mtx.category
              , mtx.id mint_tx_id
-             , ms.date, tx.post_date, sp.quantity_num
-             , mtx.amount_num, mtx.category
+             , sp.guid split_guid
+             , tx.guid tx_guid
         from (
           select mtx.date, mtx.date_yymm, mtx.account, sum(mtx.amount_num) tot
           from minttrx mtx
@@ -299,7 +300,7 @@ def match(engine):
          and mtx.isChild = 1
         ''')
     ans = engine.execute('''select * from splitmatch order by post_date''')
-    log.info('split matches: %s', pprint.pformat(ans.fetchall()))
+    log.warn('split matches:\n%s', pprint.pformat(ans.fetchall()))
 
     ans = engine.execute(
     '''
