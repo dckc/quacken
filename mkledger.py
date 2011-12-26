@@ -4,9 +4,9 @@ from datetime import date
 from decimal import Decimal
 
 # "http://furius.ca/beancount
-from beancount.ledger import Ledger, Account, Transaction, Posting, Wallet
+# from beancount.ledger import Ledger, Account, Transaction, Posting, Wallet
 
-from trxtsv import trxiter, isoDate
+from trxtsv import trxiter, isoDate, numField
 
 log = logging.getLogger(__name__)
 
@@ -23,29 +23,23 @@ def main(argv):
 
 def convert(files):
     # based on Leger.parse_file in ledger.py
-    #@@txs = list(trxiter(files))
-
-    l = Ledger()
-    #@@ get_accounts(l, txs)
-
-    l.commodities.add(USD)
 
     for tx in trxiter(files):
-        mktx(l, tx)
+        print
+        print
+        print ''.join(fmttx(tx['trx'], tx['splits']))
 
     # not sure what these do...
-    l.build_postings_lists()
-    l.complete_balances()
-    l.compute_priced_map()
-    l.complete_bookings()
-    l.build_payee_lists()
-    l.build_tag_lists()
-
-    for trx in l.transactions:
-        print trx.pretty()
+    #l.build_postings_lists()
+    #l.complete_balances()
+    #l.compute_priced_map()
+    #l.complete_bookings()
+    #l.build_payee_lists()
+    #l.build_tag_lists()
 
 
-def get_accounts(l, txs):
+def _get_accounts(l, txs):
+    ''' dead code '''
     for n in set([tx['trx']['acct'] for tx in txs]):
         l.get_account(n, create=True)
 
@@ -57,6 +51,25 @@ def get_accounts(l, txs):
     log.debug('accounts:\n%s', pprint.pformat(l.accounts))
 
 
+def fmttx(tx, splits):
+    num, split, txtype = numField(tx.get('num', ''))
+    code = num or txtype
+    l = [mkdate(tx['date']).strftime('%04Y-%02m-%02d '),
+         '* ' if splits[0].get('clr', None) == 'R' else '',
+         '(%s) ' % code if code else '',
+         tx.get('payee', ''), '\n',
+         ' ', tx['acct'], '\n']
+    for s in splits:
+        l.extend(fmtsplit(s))
+    return l
+
+
+def fmtsplit(s):
+    return (([' ;', s['memo'], '\n'] if 'memo' in s else []) +
+            ([' ; :', s['class'], ':\n'] if 'class' in s else []) +
+            [' ', s.get('acct', s.get('cat', IMBALANCE_USD)), '  ',
+             s['subtot'].replace(',', '')])
+
 def mktx(l, obj):
     tx, splits = obj['trx'], obj['splits']
     txn = Transaction()
@@ -64,21 +77,24 @@ def mktx(l, obj):
 
     # txn.flag?
     # txn.code = ...?
-    txn.payee = tx.get('payee', None)
+    # txn.payee = ???
+    txn.narration = tx.get('payee', None)
 
     tot = 0
     for s in splits:
+        # where to put class???
         anum = Decimal(s['subtot'].replace(',', ''))
         tot += anum
         post = mkposting(l, txn,
                          s.get('acct', s.get('cat', IMBALANCE_USD)),
-                         anum,
+                         -anum,
                          flag=s.get('clr', None),
                          note=s.get('memo', None))
 
-    mkposting(l, txn, tx['acct'], -tot, note=tx.get('memo', None))
+    mkposting(l, txn, tx['acct'], tot, note=tx.get('memo', None))
 
     l.transactions.append(txn)
+    return txn
 
 
 def mkposting(l, txn, acct_name, anum, flag=None, note=None):
@@ -88,7 +104,8 @@ def mkposting(l, txn, acct_name, anum, flag=None, note=None):
     txn.postings.append(post)
     post.account_name = acct_name
     post.account = l.get_account(acct_name, create=1)
-    post.amount = post.cost = Wallet(USD, anum)
+    post.amount = Wallet(USD, anum)
+    #post.cost = post.amount
     return post
 
 
