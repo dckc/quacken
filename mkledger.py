@@ -22,9 +22,11 @@ def main(argv):
 
 
 def convert(files):
-    # based on Leger.parse_file in ledger.py
+    txs = list(trxiter(files))
 
-    for tx in trxiter(files):
+    convert_accounts(txs)
+
+    for tx in txs:
         print
         print
         print ''.join(fmttx(tx['trx'], tx['splits']))
@@ -38,27 +40,29 @@ def convert(files):
     #l.build_tag_lists()
 
 
-def _get_accounts(l, txs):
-    ''' dead code '''
+def convert_accounts(txs):
+    def out(n):
+        print '@defaccount De %s USD' % nospc(n)
+
+    out(IMBALANCE_USD)
+
     for n in set([tx['trx']['acct'] for tx in txs]):
-        l.get_account(n, create=True)
+        out(n)
 
     for n in set([split['cat']
                   for tx in txs
                   for split in tx['splits'] if 'cat' in split]):
-        l.get_account(n, create=True)
-
-    log.debug('accounts:\n%s', pprint.pformat(l.accounts))
+        out(n)
 
 
 def fmttx(tx, splits):
     num, split, txtype = numField(tx.get('num', ''))
     code = num or txtype
-    l = [mkdate(tx['date']).strftime('%04Y-%02m-%02d '),
+    l = [mkdate(tx['date']).strftime('%Y-%m-%d '),
          '* ' if splits[0].get('clr', None) == 'R' else '',
          '(%s) ' % code if code else '',
          tx.get('payee', ''), '\n',
-         ' ', tx['acct'], '\n']
+         ' ', nospc(tx['acct']), '\n']
     for s in splits:
         l.extend(fmtsplit(s))
     return l
@@ -67,8 +71,13 @@ def fmttx(tx, splits):
 def fmtsplit(s):
     return (([' ;', s['memo'], '\n'] if 'memo' in s else []) +
             ([' ; :', s['class'], ':\n'] if 'class' in s else []) +
-            [' ', s.get('acct', s.get('cat', IMBALANCE_USD)), '  ',
-             s['subtot'].replace(',', '')])
+            [' ', nospc(s.get('acct', s.get('cat', IMBALANCE_USD))), '  ',
+             s['subtot'].replace(',', ''), ' ', USD, '\n'])
+
+def nospc(acctname):
+    '''grumble... beancount doesn't seem to grok spaces in account names
+    '''
+    return acctname.replace(' ', '_').replace("'", '_').replace('.', '_')
 
 def mktx(l, obj):
     tx, splits = obj['trx'], obj['splits']
