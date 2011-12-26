@@ -12,7 +12,7 @@ function showData (title, x){
     }
 
     mk(d.body, 'h1').textContent = title;
-    mk(d.body, 'pre').textContent = JSON.stringify(x);
+    mk(d.body, 'code').textContent = JSON.stringify(x);
 }
 
 function iwmdb(id) {
