@@ -17,8 +17,9 @@ Session = sqlalchemy.orm.sessionmaker()
 
 def explore(fp):
     data = json.load(fp)
-    all_cols(data)
-    show_labels(data)
+    pprint.pprint(data)
+    #all_cols(data)
+    #show_labels(data)
 
 
 def load(fp, engine):
@@ -49,12 +50,6 @@ def show_labels(data):
     pprint.pprint([(tx['id'], l['id'], l['name'])
                    for tx in data
                    for l in tx['labels']])
-
-
-def all_cols(data):
-    cols = set([k for item in data for k in item.keys()])
-    print "columns"
-    pprint.pprint(cols)
 
 
 MONTHS = [datetime.date(2011, m, 1).strftime('%b') for m in range(1, 13)]
@@ -116,7 +111,7 @@ class MintTrx(Base):
     #isLinkedToRule = Column(String)
     #isMatched = Column(String)
     isPending = Column(Boolean)
-    isSpending = Column(String)
+    isSpending = Column(Boolean)
     isTransfer = Column(Boolean)
     #labels = Column(String)
     #manualType = Column(String)
@@ -146,6 +141,12 @@ class MintTag(Base):
     trx = Column(Integer)  # ForeignKey...
     label = Column(Integer)  # ForeignKey...
     name = Column(String)
+
+
+def all_cols(data):
+    cols = set([k for item in data for k in item.keys()])
+    print "columns"
+    pprint.pprint(cols)
 
 
 def mk_cols():
@@ -185,6 +186,7 @@ def mk_cols():
     for n in names:
         print "    %s = Column(String)" % n
 
+
 def main_(argv):
     dbfn = argv[1]
     print "dbfn:", dbfn
@@ -204,13 +206,13 @@ def match(engine):
     engine.execute('''
     create table acctmatch as
     select sp.guid split_guid, tx.guid tx_guid, mtx.id mint_tx_id
-         , mtx.categoryId, mtx.category
+         , mtx.amount_num, mtx.categoryId, mtx.category
     from splits sp
     join transactions tx on sp.tx_guid = tx.guid
     join accounts acct on sp.account_guid = acct.guid,
     minttrx mtx
     where mtx.account = acct.name
-      and mtx.isChild = 0
+      and mtx.isChild = 0 and mtx.isDuplicate = 0
       and mtx.amount_num = sp.quantity_num
       and substr(tx.post_date, 5, 4) = mtx.date_yymm
     ''')
@@ -222,10 +224,34 @@ def match(engine):
     select sp.guid split_guid, acct.guid account_guid, acctmatch.mint_tx_id
     from transactions tx
     join acctmatch on acctmatch.tx_guid = tx.guid
-    join splits sp on sp.tx_guid = tx.guid and sp.guid != acctmatch.split_guid
+    join splits sp on sp.tx_guid = tx.guid
+     and sp.quantity_num = -acctmatch.amount_num
     join accounts acct on acctmatch.category = acct.name
     ''')
 
+    ans = engine.execute('''
+        select count(*), split_guid
+        from catmatch
+        group by catmatch.split_guid
+        having count(*) > 1
+        ''')
+    dups = ans.fetchall()
+    log.warn('dups: %d\n %s', len(dups), pprint.pformat(dups))
+    if len(dups) > 0:
+        log.warn('catmatch:\n%s', pprint.pformat(
+            engine.execute('''
+                select mtx.*
+                from minttrx mtx
+                join catmatch on mtx.id = catmatch.mint_tx_id
+                join (
+                  select count(*), split_guid
+                  from catmatch
+                  group by catmatch.split_guid
+                  having count(*) > 1) dups
+                  on dups.split_guid = catmatch.split_guid
+                order by mtx.id''') \
+            .fetchall()))
+        
     ans = engine.execute(
     '''
     select mtx.date, tx.post_date, tx.description, sp.quantity_num
@@ -240,6 +266,15 @@ def match(engine):
     ''')
     rows = ans.fetchall()
     log.info('matches: %d\n %s', len(rows), pprint.pformat(rows))
+
+    if len(dups) == 0:
+        engine.execute('''
+        update splits
+        set account_guid = (
+          select account_guid from catmatch
+          where catmatch.split_guid = guid )
+        where guid in (select split_guid from catmatch)
+        ''')
 
     engine.execute('drop table if exists splitmatch')
     engine.execute('''
@@ -276,7 +311,7 @@ def match(engine):
     where catmatch.split_guid is null
       and splitmatch.split_guid is null
       and mtx.category != 'Exclude From Mint'
-      and mtx.isPending != 1
+      and mtx.isPending != 1 and mtx.isDuplicate != 1
     order by mtx.id
     ''')
     rows = ans.fetchall()
@@ -290,16 +325,19 @@ def match(engine):
         where catmatch.split_guid is null
           and splitmatch.split_guid is null
           and mtx.category != 'Exclude From Mint'
-          and mtx.isPending != 1
+          and mtx.isPending != 1 and mtx.isDuplicate != 1
         order by mtx.category
         ''')
-    log.warn('mising categories: %s', pprint.pformat(ans.fetchall()))
+    log.warn('missing categories: %s', pprint.pformat(ans.fetchall()))
 
 
 def main(argv):
     logging.basicConfig(level=logging.WARN)
 
-    if '--load' in argv:
+    if '--explore' in argv:
+        trxfn = argv[2]
+        explore(open(trxfn))
+    elif '--load' in argv:
         trxfn, dbfn = argv[2:4]
         load(open(trxfn),
              sqlalchemy.create_engine('sqlite:///' + dbfn))
