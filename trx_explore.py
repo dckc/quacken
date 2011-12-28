@@ -19,7 +19,7 @@ import warnings
 import sqlalchemy
 from sqlalchemy import Column
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.types import Integer, String, Boolean, Enum
+from sqlalchemy.types import Integer, String, Boolean
 
 log = logging.getLogger(__name__)
 
