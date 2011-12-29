@@ -301,6 +301,7 @@ cat_split.memo = mx.notes
 -- todo: labels
 ;
 
+-- TODO: clean up transaction descriptions for 1-N splits
 update transactions tx
 join mintmatch mm on mm.tx_guid = tx.guid
 join mintexport mx on mm.mint_id = mx.id
@@ -380,7 +381,7 @@ select date_format(date '2010-07-26', '%m/%d/%Y');
 select round(13.6700, 2);
 
 create or replace view mint_re_export as
-select date_format(tx.post_date, '%m/%d/%Y') as date, tx.description
+select date_format(date_add(tx.post_date, interval - 1 day), '%c/%d/%Y') as date, tx.description
      , sp0.memo as original_description
      , round(abs(sp.value_num / sp.value_denom), 2) amount
      , case when sp.value_num > 0 then 'debit' else 'credit' end as transaction_type
@@ -392,6 +393,7 @@ select date_format(tx.post_date, '%m/%d/%Y') as date, tx.description
      , tx.guid as tx_guid
      , sp0.guid as main_split_guid
      , sp.guid as cat_split_guid
+     , mm.mint_id -- for ordering
 from transactions tx
 join slots ofx on ofx.obj_guid = tx.guid and ofx.name = 'notes'
 join splits sp on sp.tx_guid = tx.guid
@@ -401,7 +403,17 @@ join splits sp0 on sp0.tx_guid = tx.guid
  and sp0.guid != sp.guid
 join slots ofx_id on ofx_id.name = 'online_id'
  and ofx_id.obj_guid = sp0.guid
-join accounts on accounts.guid = sp0.account_guid;
+join accounts on accounts.guid = sp0.account_guid
+left join mintmatch mm on mm.cat_split_guid = sp.guid;
 
 select * from mint_re_export
-order by post_date desc;
+order by to_days(post_date) desc, mint_id;
+
+select date, description, original_description
+     , amount, transaction_type, category, account_name
+-- TODO: labels, notes
+from mint_re_export
+order by to_days(post_date) desc, mint_id
+into outfile '/home/connolly/qtrx/dm93finance/transactions.csv'
+fields terminated by ',' enclosed by '"'
+;

@@ -22,6 +22,11 @@ log = logging.getLogger(__name__)
 
 
 def main(argv):
+    if '--project' in argv:
+        trx_in, trx_out = argv[2:5]
+        project(open(trx_in), open(trx_out, 'w'))
+        return
+
     export_file, engine_url = argv[1:3]
     import_csv(open(export_file), sqlalchemy.create_engine(engine_url))
 
@@ -64,6 +69,24 @@ def mkdate(mm_dd_yyyy):
     '''
     m, d, y = map(int, mm_dd_yyyy.split('/'))
     return datetime.date(y, m, d)
+
+
+def project(lines, outfp,
+            exclude_cols=('labels', 'notes'),
+            select_accts=('PERFORMANCE CHECKING',),
+            exclude_cats=('Exclude From Mint',)):
+    inrows = csv.reader(lines)
+    cols = [c.name for c in Trx.__table__.columns][2:]  # id, num not imported
+    ax = cols.index('account_name')
+    cx = cols.index('category')
+    colx = [cols.index(c) for c in cols
+            if c not in exclude_cols]
+    log.debug('cols, colx: %s, %s', cols, colx)
+    outrows = csv.writer(outfp, quoting=csv.QUOTE_ALL,
+                         lineterminator='\n')
+    outrows.writerows([
+        [row[ix] for ix in colx] for row in inrows
+        if row[ax] in select_accts and row[cx] not in exclude_cats])
 
 
 if __name__ == '__main__':
