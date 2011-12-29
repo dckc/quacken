@@ -1,4 +1,5 @@
 use dm93finance;
+SET sql_safe_updates=0;
 
 select ma.* from
 (select distinct account_name from mintexport) ma
@@ -30,10 +31,94 @@ from (select category, case when tot > 0 then 'INCOME' else 'EXPENSE' end as acc
      group by category) x) mc
 join commodities usd on usd.mnemonic='USD'
 join accounts parent on parent.name=
-   case when mc.account_type = 'EXPENSE' then 'Mint Expenses' else 'Mint Income' end
+   case when mc.account_type = 'EXPENSE' then 'Spending' else 'Income' end
 order by 3, 2;
 -- 124 row(s) affected
 
+drop table mint_budget_categories;
+create table mint_budget_categories (
+id	int /* not null auto_increment*/,
+category varchar(80),
+subcategory varchar(80),
+amount decimal(8, 2),
+budget decimal(8, 2) /*,
+  PRIMARY KEY (id)*/
+);
+
+load data infile '/home/connolly/qtrx/dm93finance/budget_mint.csv'
+into table mint_budget_categories
+fields terminated by ',' optionally enclosed by '"'
+ignore 1 lines;
+
+delete from mint_budget_categories where id=0;
+alter table mint_budget_categories
+add constraint primary key (id);
+
+update mint_budget_categories
+set subcategory = null
+where subcategory = '';
+
+/* ensure all parent accounts exist*/
+insert into accounts
+select replace(uuid(), '-', '') as guid
+     , mc.category as name
+     , 'EXPENSE' account_type
+     , usd.guid as commodity_guid
+     , usd.fraction as commodity_scu
+     , 0 as non_std_scu
+     , parent.guid as parent_guid
+     , '' as code
+     , '' as description
+     , 0 as hidden
+     , 0 as placeholder
+from mint_budget_categories mc
+join accounts parent on parent.name = 'Mint Expenses'
+join commodities usd on usd.mnemonic = 'USD'
+where subcategory is null
+and category not in (select name from accounts);
+
+update
+-- select * from
+ accounts a
+join (
+select id, category
+from mint_budget_categories
+where subcategory is null
+union
+select id, subcategory
+from mint_budget_categories
+where subcategory is not null) mc
+on mc.category = a.name
+set a.code = mc.id
+;
+
+
+/* organize gnucash accounts according to mint structure */
+update
+-- select p.name, a.name from
+accounts a
+join mint_budget_categories mc
+  on mc.subcategory = a.name
+ and a.account_type in ('INCOME', 'EXPENSE')
+join accounts p
+  on mc.category = p.name
+-- order by p.name, a.name
+set a.parent_guid = p.guid
+;
+
+/* oops; forgot to reduce scope to matching codes or INCOME/EXPENSE */
+select a.name, a.code
+from accounts a
+join accounts p on a.parent_guid = p.guid
+join accounts gp on p.parent_guid = gp.guid
+ and gp.name in ('Income', 'Spending')
+where a.code = '';
+
+select * from accounts where guid in ('80b7ab81742b3a4f15b5917aed8217e3',
+'a2d3ae44ea88210236f9397662d32028',
+'870fe2eded7f0d4d01b474556b9e03bd');
+
+/* explored slots while having trouble adding accounts */
 select distinct slot_type from slots
 order by 1;
 select * from slots where slot_type=10;
@@ -320,4 +405,3 @@ join accounts on accounts.guid = sp0.account_guid;
 
 select * from mint_re_export
 order by post_date desc;
-
