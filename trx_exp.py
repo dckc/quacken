@@ -14,9 +14,9 @@ Base = declarative_base()
 Session = sqlalchemy.orm.sessionmaker()
 
 Money = DECIMAL(precision=8, scale=2)
-FreeText = String(500)
-TagList = String(500)
-Name = String(500)
+FreeText = String(250)
+TagList = String(250)
+Name = String(80)
 
 log = logging.getLogger(__name__)
 
@@ -29,6 +29,7 @@ def main(argv):
 class Trx(Base):
     __tablename__ = 'mintexport'
     id = Column(Integer, primary_key=True)
+    num = Column(Name)
     date = Column(Date, nullable=False)
     description = Column(FreeText)
     original_description = Column(FreeText)
@@ -47,7 +48,7 @@ def import_csv(lines, engine,
 
     rows = csv.reader(lines)
     rows.next()  # skip schema
-    cols = [c.name for c in Trx.__table__.columns][1:]  # id is not imported
+    cols = [c.name for c in Trx.__table__.columns][2:]  # id, num not imported
     cat_col = cols.index('category')
     log.debug('cols: %s', cols)
     engine.execute(Trx.__table__.insert(),
