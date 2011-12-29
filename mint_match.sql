@@ -1,5 +1,3 @@
-SELECT * FROM `gnucash`.`mintexport`;
-
 use dm93finance;
 
 select ma.* from
@@ -60,22 +58,27 @@ from accounts parent
 join accounts acct on acct.parent_guid = parent.guid
 where parent.name='Mint Export';
 
-
--- create index trx_sig on mintexport (date, original_description(300), transaction_type, amount);
-
+/* Just a few dups of this sort... */
 select count(*), date, original_description, transaction_type, amount
 from mintexport
 group by date, original_description, transaction_type, amount
 having count(*) > 1
 order by date desc;
 
-select distinct name from slots;
+drop table mintmatch;
 
--- create table mintmatch as
-select tx.guid as tx_guid, sp.guid, acct.guid, acct.name, mx.id as mint_id from
-transactions tx
+/* match by date, memo, amount */
+create table mintmatch as
+select tx.post_date
+  , mx.original_description
+  , mx.amount
+  , mx.category
+  , acct.name acct_name
+  , sp.guid as split_guid
+  , mx.id as mint_id
+  , null as cat_guid
+from transactions tx
 join splits sp on sp.tx_guid = tx.guid
-join accounts acct on acct.guid = sp.account_guid
 join
 (
 select obj_guid, substring_index(string_val, 'Memo:', -1) as ofx_memo
@@ -83,13 +86,55 @@ from slots
 where name = 'notes') ofx on ofx.obj_guid = tx.guid
 join mintexport mx
 on mx.original_description = ofx.ofx_memo
-  and timestampdiff(day, tx.post_date, mx.date) = 0;
+  and timestampdiff(day, tx.post_date, mx.date) between -1 and 0
+  and sp.value_num = sp.value_denom * (mx.amount * case when mx.transaction_type = 'debit' then -1 else 1 end)
+join accounts acct
+  on acct.guid = sp.account_guid
+ and acct.name = mx.account_name
+order by 1;
 
-select count(*) from mintmatch;
-select count(*) from mintexport where account_name='PERFORMANCE CHECKING';
-select max(post_date) from transactions;
+-- TODO: fix 'Dave &amp; Buster''s'
+-- TODO: update tx.description using full ofx memo
 
+
+/* match checks */
+insert into mintmatch
+select tx.post_date
+  , mx.original_description
+  , mx.amount
+  , mx.category
+  , acct.name acct_name
+  , sp.guid as split_guid
+  , mx.id as mint_id
+  , null as cat_guid
+from transactions tx
+join splits sp on sp.tx_guid = tx.guid
+join mintexport mx
+on mx.original_description = concat('Check #', tx.num, ' #', tx.num)
+join accounts acct
+  on acct.guid = sp.account_guid
+ and acct.name = mx.account_name
+order by 1;
+
+/* which mint transactions matched more than one gnucash trx? */
+select mx.id, mx.date, mx.description, mx.amount, sp.value_num / sp.value_denom as split_amount
+from mintexport mx
+join (
+select count(*) qty, mint_id, split_guid
+from mintmatch
+group by mint_id
+having count(*) > 1
+order by 1 desc) dups
+ on dups.mint_id = mx.id
+join mintmatch mm on mm.mint_id = mx.id
+join splits sp on mm.split_guid = sp.guid;
+
+/* just a few mismatches... check dates? */
 select *
 from mintexport mx
 left join mintmatch mm on mx.id = mm.mint_id
-where mm.mint_id is null;
+where mm.mint_id is null
+  and mx.date > date '2010-07-20'
+  and mx.date <= date '2010-10-20'
+  and mx.account_name = 'PERFORMANCE CHECKING'
+order by mx.date;
