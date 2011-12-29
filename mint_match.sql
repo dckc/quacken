@@ -210,7 +210,16 @@ where cat_split.account_guid != mm.cat_guid;
 
 update splits cat_split
 join mintmatch mm on mm.cat_split_guid = cat_split.guid
-set cat_split.account_guid = mm.cat_guid;
+join mintexport mx on mm.mint_id = mx.id
+set cat_split.account_guid = mm.cat_guid,
+cat_split.memo = mx.notes
+-- todo: labels
+;
+
+update transactions tx
+join mintmatch mm on mm.tx_guid = tx.guid
+join mintexport mx on mm.mint_id = mx.id
+set tx.description = mx.description;
 
 /* manual clean-up */
 select * from mintexport mx
@@ -274,4 +283,41 @@ income splits have negative amounts
 select * from splits where account_guid = '9e210d4a31ac11e19236001921c7b860';
 select * from splits where account_guid = '9e21242e31ac11e19236001921c7b860';
 */
+
+select * from slots
+-- join transactions tx on tx.guid = slots.obj_guid
+join splits obj on obj.guid = slots.obj_guid
+where name='online_id';
+
+/* reproduce mint export
+select date_format(date '2010-07-26', '%m/%d/%Y');
+ */
+select round(13.6700, 2);
+
+create or replace view mint_re_export as
+select date_format(tx.post_date, '%m/%d/%Y') as date, tx.description
+     , sp0.memo as original_description
+     , round(abs(sp.value_num / sp.value_denom), 2) amount
+     , case when sp.value_num > 0 then 'debit' else 'credit' end as transaction_type
+     , cat.name as category
+     , accounts.name as account_name
+     , case when sp0.reconcile_state = 'y' then 'Audited' else '' end labels -- TODO
+     , sp.memo notes
+     , tx.post_date
+     , tx.guid as tx_guid
+     , sp0.guid as main_split_guid
+     , sp.guid as cat_split_guid
+from transactions tx
+join slots ofx on ofx.obj_guid = tx.guid and ofx.name = 'notes'
+join splits sp on sp.tx_guid = tx.guid
+join accounts cat on sp.account_guid = cat.guid
+join splits sp0 on sp0.tx_guid = tx.guid
+ and sp0.memo = substring_index(ofx.string_val, 'Memo:', -1)
+ and sp0.guid != sp.guid
+join slots ofx_id on ofx_id.name = 'online_id'
+ and ofx_id.obj_guid = sp0.guid
+join accounts on accounts.guid = sp0.account_guid;
+
+select * from mint_re_export
+order by post_date desc;
 
