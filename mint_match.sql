@@ -150,10 +150,11 @@ where num is not null;
 /* We need unique names for accounts for this work. */
 create unique index accounts_name on accounts (name(250));
 
-drop table if exists mintmatch;
 
 /* match by date, memo, amount */
-create table mintmatch as
+-- drop table if exists mintmatch;
+-- create table mintmatch as
+insert into mintmatch
 select tx.post_date
   , mx.original_description
   , (mx.amount * case when mx.transaction_type = 'debit' then -1 else 1 end) amount
@@ -179,6 +180,8 @@ on mx.original_description = ofx.ofx_memo
   and sp.value_num = sp.value_denom * (mx.amount * case when mx.transaction_type = 'credit' then -1 else 1 end)
 join accounts on accounts.name = mx.account_name
 join accounts cat on cat.name = mx.category
+left join mintmatch mm on mm.mint_id = mx.id
+where mm.mint_id is null
 order by 1;
 
 -- TODO: fix 'Dave &amp; Buster''s'
@@ -216,7 +219,8 @@ insert into mintmatch
          and mtx.original_description = ms.original_description
         join accounts on accounts.name = mtx.account_name
         join accounts cat on cat.name = mtx.category
-        where not exists (select * from mintmatch mm where mm.mint_id = mtx.id)
+        left join mintmatch mm on mm.mint_id = mtx.id
+        where mm.mint_id is null
 order by post_date;
 
 select * from mintmatch where cat_split_guid is null;
@@ -288,16 +292,20 @@ order by 1;
 
 /* And now the moment we've all been waiting for...
 what are we about to update? */
-select *
+select mm.post_date, mm.original_description, cat.name ocat, mm.category, cat_split.*
 from splits cat_split
 join mintmatch mm on mm.cat_split_guid = cat_split.guid
-where cat_split.account_guid != mm.cat_guid;
+join accounts cat on cat_split.account_guid = cat.guid
+where cat.account_type in ('CASH', 'INCOME', 'EXPENSE')
+ and cat_split.account_guid != mm.cat_guid;
 
 update splits cat_split
 join mintmatch mm on mm.cat_split_guid = cat_split.guid
 join mintexport mx on mm.mint_id = mx.id
+join accounts cat on cat_split.account_guid = cat.guid
 set cat_split.account_guid = mm.cat_guid,
 cat_split.memo = mx.notes
+where cat.account_type in ('CASH', 'INCOME', 'EXPENSE')
 -- todo: labels
 ;
 
@@ -305,7 +313,8 @@ cat_split.memo = mx.notes
 update transactions tx
 join mintmatch mm on mm.tx_guid = tx.guid
 join mintexport mx on mm.mint_id = mx.id
-set tx.description = mx.description;
+set tx.description = mx.description
+where mm.split_qty = 1;
 
 /* manual clean-up */
 select * from mintexport mx
@@ -377,11 +386,16 @@ where name='online_id';
 
 /* reproduce mint export
 select date_format(date '2010-07-26', '%m/%d/%Y');
- */
 select round(13.6700, 2);
+ */
 
 create or replace view mint_re_export as
-select date_format(date_add(tx.post_date, interval - 1 day), '%c/%d/%Y') as date, tx.description
+select date_format(
+       -- wierd... mint dates are off by 1 and then they're not.
+       case when tx.post_date < date '2011-04-20'
+       then date_add(tx.post_date, interval - 1 day)
+       else tx.post_date end, '%c/%d/%Y') as date
+     , tx.description
      , sp0.memo as original_description
      , round(abs(sp.value_num / sp.value_denom), 2) amount
      , case when sp.value_num > 0 then 'debit' else 'credit' end as transaction_type
@@ -414,6 +428,7 @@ select date, description, original_description
 -- TODO: labels, notes
 from mint_re_export
 order by to_days(post_date) desc, mint_id
-into outfile '/home/connolly/qtrx/dm93finance/transactions.csv'
+limit 100000
+into outfile '/home/connolly/qtrx/dm93finance/mint_re_export.csv'
 fields terminated by ',' enclosed by '"'
 ;
