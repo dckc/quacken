@@ -177,12 +177,63 @@ where name = 'notes') ofx on ofx.obj_guid = tx.guid
 join mintexport mx
 on mx.original_description = ofx.ofx_memo
   and timestampdiff(day, tx.post_date, mx.date) between -1 and 0
-  and sp.value_num = sp.value_denom * (mx.amount * case when mx.transaction_type = 'credit' then -1 else 1 end)
+  and abs(sp.value_num) = sp.value_denom * mx.amount
+  -- * case when mx.transaction_type = 'credit' then -1 else 1 end
 join accounts on accounts.name = mx.account_name
 join accounts cat on cat.name = mx.category
 left join mintmatch mm on mm.mint_id = mx.id
 where mm.mint_id is null
 order by 1;
+
+/* Let's look at gnucash, mint stuff interleaved. */
+select original_description
+from mintexport mx
+where mx.account_name = 'Discover';
+
+select 'G', date_format(tx.post_date, '%Y-%m-%d') date, tx.description, cat.name, sp.value_num / 100 gamount
+from transactions tx
+join splits dsp on dsp.tx_guid = tx.guid
+join accounts disc on disc.guid = dsp.account_guid and disc.name = 'Discover'
+join splits sp on sp.tx_guid = tx.guid
+ and sp.guid != dsp.guid
+join accounts cat on cat.guid = sp.account_guid
+
+union all
+select 'M', date_format(mx.date, '%Y-%m-%d'), substr(mx.original_description, 1, 32), mx.category, mx.amount
+from mintexport mx
+where mx.account_name = 'Discover'
+
+order by 2, 3;
+
+/* strict matching */
+insert into mintmatch
+select tx.post_date
+  , mx.original_description
+  , (mx.amount * case when mx.transaction_type = 'debit' then -1 else 1 end) amount
+  , mx.category
+  , cat.guid cat_guid
+  , mx.account_name acct_name
+  , a.guid acct_guid
+  , tx.guid as tx_guid
+  , mx.id as mint_id
+  , sp.guid cat_split_guid
+  , 1 split_qty
+from transactions tx
+join splits asp on asp.tx_guid = tx.guid
+join accounts a on a.guid = asp.account_guid
+join splits sp on sp.tx_guid = tx.guid
+ and sp.guid != asp.guid
+join accounts cat on cat.guid = sp.account_guid
+
+join mintexport mx
+  on mx.account_name = a.name
+ and timestampdiff(day, tx.post_date, mx.date) = 0
+ and substr(mx.original_description, 1, 32) = tx.description
+ and mx.amount * sp.value_denom = sp.value_num 
+left join mintmatch mm on mm.mint_id = mx.id
+where mm.mint_id is null
+
+order by tx.post_date, tx.description, sp.value_num;
 
 -- TODO: fix 'Dave &amp; Buster''s'
 -- TODO: update tx.description using full ofx memo
@@ -232,16 +283,30 @@ group by name
 having count(*) > 1
 order by name;
 
-select * from mintmatch where cat_guid is null;
+alter table mintmatch
+add column ddelta int;
 
-/* which mint transactions matched more than one gnucash trx? */
-select mx.id, mx.date, mx.description, mx.amount
+update mintmatch mm
+join mintexport mx on mm.mint_id = mx.id
+set ddelta = timestampdiff(day, mm.post_date, mx.date);
+
+/* Delete duplicate matches where a better one exists. */
+delete mm
+-- select *
+from mintmatch mm
+join mintmatch mm2
+  on mm.mint_id = mm2.mint_id
+ and mm.tx_guid != mm2.tx_guid
+ and abs(mm.ddelta) > abs(mm2.ddelta);
+
+/* some duplicate matches remain. */
+select mx.id, mx.date, mx.original_description, mx.amount
      , osp.value_num / osp.value_denom as ofx_split_amount
      , mm.*
 from mintexport mx
 join (
-select count(*) qty, mint_id, tx_guid
-from mintmatch
+select count(*) qty, mint_id
+from (select distinct mint_id, tx_guid from mintmatch) ea
 group by mint_id
 having count(*) > 1
 order by 1 desc) dups
@@ -277,9 +342,9 @@ on mx.original_description = q.memo
 and abs(timestampdiff(day, q.min_post, mx.date)) < 20
 
 where mm.mint_id is null
-  and mx.date > date '2010-07-20'
-  and mx.date <= date '2010-10-20'
-  and mx.account_name = 'PERFORMANCE CHECKING'
+  -- and mx.date > date '2010-07-20'
+  -- and mx.date <= date '2010-10-20'
+  -- and mx.account_name = 'PERFORMANCE CHECKING'
 
 order by mx.date;
 
@@ -292,7 +357,7 @@ order by 1;
 
 /* And now the moment we've all been waiting for...
 what are we about to update? */
-select mm.post_date, mm.original_description, cat.name ocat, mm.category, cat_split.*
+select mm.post_date, mm.original_description, cat.name ocat, cat.account_type, mm.category, cat_split.*
 from splits cat_split
 join mintmatch mm on mm.cat_split_guid = cat_split.guid
 join accounts cat on cat_split.account_guid = cat.guid
@@ -383,6 +448,24 @@ select * from slots
 -- join transactions tx on tx.guid = slots.obj_guid
 join splits obj on obj.guid = slots.obj_guid
 where name='online_id';
+
+/* Fix credit card transfers */
+update
+-- select tx.post_date, tx.description, s.value_num from
+splits s
+join accounts ccp
+  on s.account_guid = ccp.guid
+ and ccp.name = 'Credit Card Payment'
+join transactions tx on s.tx_guid = tx.guid
+join accounts cc
+  on cc.name = case
+     when tx.description like '%American Express' then 'Costco TrueEarnings Card'
+     when tx.description like '%Discover%' then 'Discover'
+     when tx.description like '%Home Depot%' then 'Home Depot CC'
+     end
+-- order by tx.post_date
+set s.account_guid = cc.guid
+;
 
 /* reproduce mint export
 select date_format(date '2010-07-26', '%m/%d/%Y');
