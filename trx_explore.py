@@ -19,7 +19,7 @@ import warnings
 import sqlalchemy
 from sqlalchemy import Column
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.types import Integer, String, Boolean
+from sqlalchemy.types import Integer, String, Boolean, Date
 
 log = logging.getLogger(__name__)
 
@@ -37,8 +37,15 @@ def explore(fp):
 def load(fp, engine):
     data = json.load(fp)
 
-    MintTrx.__table__.drop(bind=engine)
-    MintTag.__table__.drop(bind=engine)
+    try:
+        MintTrx.__table__.drop(bind=engine)
+    except:
+        pass
+
+    try:
+        MintTag.__table__.drop(bind=engine)
+    except:
+        pass
 
     Base.metadata.create_all(engine)
     s = Session(bind=engine)
@@ -53,8 +60,18 @@ def load(fp, engine):
 
     s.commit()
 
-    pprint.pprint(s.execute('select * from minttrx').fetchall())
-    pprint.pprint(s.execute('select * from minttag').fetchall())
+    pprint.pprint(s.execute('''
+        select count(*), merchant
+        from minttrx
+        group by merchant
+        order by 1 desc
+        ''').fetchall())
+    pprint.pprint(s.execute('''
+        select count(*), label, name
+        from minttag
+        group by label, name
+        order by 1 desc
+        ''').fetchall())
 
 
 def show_labels(data):
@@ -74,13 +91,33 @@ def mktrx(o):
     amount_num=int(o['amount'].replace('$', '').\
                    replace(',', '').replace('.', '')) \
                    * (-1 if o['isDebit'] else 1)
-                           
-    mmdd = '%02d%02d' % (MONTHS.index(o['date'][:3]) + 1,
-                         int(o['date'][4:]))
+
+    this_year = datetime.date.today().year
     return MintTrx(**dict(fields,
                           id=int(o['id']),
-                          date_yymm=mmdd,
+                          date=mkdate(o['date'], this_year),
                           amount_num=amount_num))
+
+def mkdate(txt, this_year):
+    '''
+    >>> mkdate('Nov 21', 2011)
+    datetime.date(2011, 11, 21)
+
+    >>> mkdate('12/30/10', 2011)
+    datetime.date(2010, 12, 30)
+
+    >>> mkdate('12/30/56', 2011)
+    datetime.date(1956, 12, 30)
+    '''
+    if txt[0].isdigit():
+        m, d, yy = [int(numeral) for numeral in txt.split('/')]
+        century = this_year - (this_year % 100) - (100 if yy > 50 else 0)
+        y = century + yy
+    else:
+        y = this_year
+        m = MONTHS.index(txt[:3]) + 1
+        d = int(txt[4:])
+    return datetime.date(y, m, d)
 
 
 def explore_db(fn):
@@ -109,8 +146,7 @@ class MintTrx(Base):
     amount_num = Column(Integer)  # assuming 100 denominator
     category = Column(String)
     categoryId = Column(String)
-    date = Column(String)
-    date_yymm = Column(String)
+    date = Column(Date)
     fi = Column(String)
     #inlineadviceid = Column(String)
     #isAfterFiCreationTime = Column(String)
