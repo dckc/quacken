@@ -91,7 +91,7 @@ MONTHS = [datetime.date(2011, m, 1).strftime('%b') for m in range(1, 13)]
 def mktrx(o):
     fields = dict([(str(k), v)  # **args can't be unicode
                    for k, v in o.iteritems()
-                   if k != 'id' and k in MintTrx.__dict__.keys()])
+                   if k in MintTrx.__dict__.keys()])
 
     amount=float(o['amount'].replace('$', '').replace(',', ''))
 
