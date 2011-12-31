@@ -416,13 +416,13 @@ where mx.isChild = 1
 and done.guid is null
 order by mm.post_date;
 
-/*TODO: clean up transaction descriptions
+/*TODO: clean up transaction descriptions */
 update transactions tx
-join mintmatch mm on mm.tx_guid = tx.guid
-join mintexport mx on mm.mint_id = mx.id
+join mint_gc_matches mm on mm.tx_guid = tx.guid
+join minttrx mx on mm.mint_id = mx.id
 set tx.description = mx.description
-where mm.split_qty = 1;
-*/
+where mx.isChild = 0 and mx.children is null;
+
 
 /* TODO: undo damage from false positives from earlier algorithm*/
 select * from mint_gc_matches mm
@@ -497,7 +497,7 @@ select date_format(
      , tx.guid as tx_guid
      , sp0.guid as main_split_guid
      , sp.guid as cat_split_guid
-     , mm.mint_id -- for ordering
+     , mm.id -- for ordering
 from transactions tx
 join slots ofx on ofx.obj_guid = tx.guid and ofx.name = 'notes'
 join splits sp on sp.tx_guid = tx.guid
@@ -508,7 +508,7 @@ join splits sp0 on sp0.tx_guid = tx.guid
 join slots ofx_id on ofx_id.name = 'online_id'
  and ofx_id.obj_guid = sp0.guid
 join accounts on accounts.guid = sp0.account_guid
-left join mintmatch mm on mm.cat_split_guid = sp.guid;
+left join mint_gc_matches mm on mm.cat_split_guid = sp.guid;
 
 select * from mint_re_export
 order by to_days(post_date) desc, mint_id;
@@ -522,7 +522,7 @@ select date, description, original_description
      , amount, transaction_type, category, account_name
 -- TODO: labels, notes
 from mint_re_export
-order by to_days(post_date) desc, mint_id
+order by to_days(post_date) desc, id desc
 limit 100000
 into outfile '/home/connolly/qtrx/dm93finance/mint_re_export.csv'
 fields terminated by ',' enclosed by '"'
