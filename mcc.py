@@ -10,10 +10,14 @@ import mechanize
 log = logging.getLogger(__name__)
 
 def main(argv):
+    import sys
+
     u, p = argv[1:3]
     c = MintCloudClient()
     c.login(u, p)
-    print c.getJsonData()
+
+    #pprint.pprint(c.getCategories())
+    json.dumps(c.allTransactions(), sys.stdout, ensure_ascii=False, indent=2)
 
 
 class MintCloudClient(mechanize.Browser):
@@ -24,7 +28,6 @@ class MintCloudClient(mechanize.Browser):
         self.open(self.base + pg)
 
         def has_validation(f):
-            log.debug('checking form: %s', f)
             return len([c for c in f.controls
                         if c.name == 'validation' and c.value]) > 0
 
@@ -34,13 +37,43 @@ class MintCloudClient(mechanize.Browser):
         log.debug('login: submit creds.')
         return self.submit()
 
-    def getJsonData(self, task='categories', rnd='1325289755805',
-                    path='getJsonData.xevent'):
+    def getJsonData(self, path='getJsonData.xevent',
+                    **urlparams):
+        log.debug('get JSON data: %s %s', path, urlparams)
         ans = self.open('%s%s?%s' % (
-            self.base, path,
-            urllib.urlencode(dict(task=task, rnd=rnd))))
+            self.base, path, urllib.urlencode(urlparams)))
         return json.load(ans)
 
+    def getCategories(self):
+        return self.getJsonData(task='categories', rnd='1325289755805')
+
+    def allTransactions(self, rnd='1325292983069'):
+        alltx = []
+        offset = 0
+        while 1:
+            data = self.getJsonData(queryNew='',
+                                    offset=offset,
+                                    filterType='cash',
+                                    comparableType=0,
+                                    task='transactions',
+                                    rnd=rnd)
+            txns = data['set'][0].get('data', [])
+            if not txns:
+                break
+            alltx.extend(txns)
+            offset += len(txns)
+
+        return alltx
+
+    def listTransaction(self, queryNew='', offset=0, filterType='cash',
+                        comparableType=3, rnd='1325292983068',
+                        path='listTransaction.xevent'):
+        return self.getJsonData(path='listTransaction.xevent',
+                                queryNew=queryNew,
+                                offset=offset,
+                                filterType=filterType,
+                                comparableType=comparableType,
+                                rnd=rnd)
 
 if __name__ == '__main__':
     import sys
