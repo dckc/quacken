@@ -19,9 +19,14 @@ import warnings
 import sqlalchemy
 from sqlalchemy import Column
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.types import Integer, String, Boolean, Date
+from sqlalchemy.types import Integer, String, Boolean, Date, DECIMAL
 
 log = logging.getLogger(__name__)
+
+Money = DECIMAL(precision=8, scale=2)
+FreeText = String(250)
+TagList = String(250)
+Name = String(80)
 
 Base = declarative_base()
 Session = sqlalchemy.orm.sessionmaker()
@@ -88,15 +93,12 @@ def mktrx(o):
                    for k, v in o.iteritems()
                    if k != 'id' and k in MintTrx.__dict__.keys()])
 
-    amount_num=int(o['amount'].replace('$', '').\
-                   replace(',', '').replace('.', '')) \
-                   * (-1 if o['isDebit'] else 1)
+    amount=float(o['amount'].replace('$', '').replace(',', ''))
 
     this_year = datetime.date.today().year
     return MintTrx(**dict(fields,
-                          id=int(o['id']),
                           date=mkdate(o['date'], this_year),
-                          amount_num=amount_num))
+                          amount=amount))
 
 def mkdate(txt, this_year):
     '''
@@ -141,13 +143,12 @@ class MintTrx(Base):
 
     id = Column(Integer, primary_key=True)
 
-    account = Column(String)
-    amount = Column(String)
-    amount_num = Column(Integer)  # assuming 100 denominator
-    category = Column(String)
-    categoryId = Column(String)
+    account = Column(Name)
+    amount = Column(Money)
+    category = Column(Name)
+    categoryId = Column(Integer)
     date = Column(Date)
-    fi = Column(String)
+    fi = Column(Name)
     #inlineadviceid = Column(String)
     #isAfterFiCreationTime = Column(String)
     isCheck = Column(Boolean)
@@ -163,13 +164,13 @@ class MintTrx(Base):
     isTransfer = Column(Boolean)
     #labels = Column(String)
     #manualType = Column(String)
-    mcategory = Column(String)
-    merchant = Column(String)
-    mmerchant = Column(String)
-    note = Column(String)
+    mcategory = Column(Name)
+    merchant = Column(FreeText)
+    mmerchant = Column(FreeText)
+    note = Column(FreeText)
     #numberMatchedByRule = Column(String)
-    odate = Column(String)
-    omerchant = Column(String)
+    odate = Column(Name)
+    omerchant = Column(FreeText)
     #ruleCategory = Column(String)
     #ruleCategoryId = Column(String)
     #ruleMerchant = Column(String)
@@ -180,7 +181,7 @@ class MintAcct(Base):
     __tablename__ = 'mintacct'
     id = Column(Integer, primary_key=True)
     #kind = Column(Enum('A', 'L', 'I', 'E', 'Q'), primary_key=True)
-    name = Column(String)
+    name = Column(Name)
 
 
 class MintTag(Base):
@@ -188,7 +189,7 @@ class MintTag(Base):
     id = Column(Integer, primary_key=True)
     trx = Column(Integer)  # ForeignKey...
     label = Column(Integer)  # ForeignKey...
-    name = Column(String)
+    name = Column(Name)
 
 
 def all_cols(data):
@@ -387,9 +388,9 @@ def main(argv):
         trxfn = argv[2]
         explore(open(trxfn))
     elif '--load' in argv:
-        trxfn, dbfn = argv[2:4]
+        trxfn, dburl = argv[2:4]
         load(open(trxfn),
-             sqlalchemy.create_engine('sqlite:///' + dbfn))
+             sqlalchemy.create_engine(dburl))
     elif '--match' in argv:
         dbfn = argv[2]
         match(sqlalchemy.create_engine('sqlite:///' + dbfn))
