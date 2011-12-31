@@ -25,6 +25,8 @@ order by date, (case when isChild=1 then parent else id end);
 
 /* We need unique names for accounts for this work. */
 create unique index accounts_name on accounts (name(250));
+/* codes are unique where they're non-trivial */
+create index accounts_code on accounts (code(250));
 
 /* We assume any mint transactions whose accounts (e.g. Cash) don't match
  * existing gnucash accounts by name can be ignored. Eyeball them: */
@@ -181,7 +183,7 @@ where slots.obj_guid is null;
 /* Find various descriptions of each transaction split.
  * Denormalize a bit, while we're at it. */
 create or replace view tx_desc as
-select spa.guid, tx.post_date, a.guid account_guid, a.name account, value_num
+select spa.guid, tx.guid tx_guid, tx.post_date, a.guid account_guid, a.name account, value_num
      /* My bank repeats the OFX NAME in the MEMO, but Discover doesn't Ugh. */
      , tx.description
      , case when spa.memo > '' then spa.memo else null end memo
@@ -195,63 +197,72 @@ left join slots ofxmemo on ofxmemo.obj_guid = tx.guid
      and ofxmemo.name = 'notes'
 join accounts a on spa.account_guid = a.guid;
 
--- drop table mint_gc_matches;
-create table mint_gc_matches as
-select gcand.guid, gcand.post_date, timestampdiff(day, gcand.post_date, mcand.date) ddelta
+drop table if exists mint_gc_matches;
+create table mint_gc_matches (
+ guid varchar(32) not null, -- of split corresponding to account
+ tx_guid varchar(32) not null,
+ post_date timestamp not null,
+ ddelta int not null,
+ id int not null,
+ children int,
+ date date not null,
+ account varchar(250) not null,
+ description varchar(250) not null,
+ amount decimal(8, 2) not null,
+ categoryId int not null,
+ category varchar(80) not null,
+ cat_guid varchar(32) not null,
+ account_guid varchar(32) not null,
+ cat_split_guid varchar(32)
+);
+create index mgm_id on mint_gc_matches (id);
+create index mgm_guid on mint_gc_matches (guid);
+
+insert into mint_gc_matches (
+  guid, tx_guid, post_date, ddelta, id, children, date, account, description, amount
+, categoryId, category, cat_guid, account_guid)
+select distinct gcand.guid, gcand.tx_guid, gcand.post_date, timestampdiff(day, gcand.post_date, mcand.date) ddelta
      , mcand.*, cat.guid cat_guid, account_guid
 from (
-/* Candidates: id, parts, date, account, omerchant, signed amount
-   where amount is the total in the isChild case. */
-select mx.id, tots.*, mx.categoryId, mx.category
-from minttrx mx
-join (
-  select count(*) parts, date, account, omerchant description
-       , sum(case when isDebit = 1 then -amount else amount end) amount
-  from minttrx
-  where isChild = 1 and isDuplicate = 0
-  group by date, account, omerchant) tots
-on mx.date = tots.date
-and mx.account = tots.account
-and mx.omerchant = tots.description
-where mx.isChild = 1
-and isDuplicate = 0
-and category not in ('Exclude From Mint')
-
-union all
-
-select id, 1 parts, date, account
+select mx.id, mx.children, mx.date, mx.account
      /* patch wierd Check #nnnn #nnnn */
-     , case when omerchant like 'Check #% #%'
-       then substr(omerchant, 1, length('Check #9999'))
-       else omerchant end d
-     , case when isDebit = 1 then - amount else amount end amount
-     , categoryId, category
-from minttrx
-where isChild != 1
-and isDuplicate = 0
-and category not in ('Exclude From Mint')
+     , case when mx.omerchant like 'Check #% #%'
+       then substr(mx.omerchant, 1, length('Check #9999'))
+       else mx.omerchant end description
+     , case when mx.isDebit = 1 then - mx.amount else mx.amount end amount
+     , mx.categoryId, mx.category
+from minttrx mx
+left join mint_gc_matches done on done.id = mx.id
+where mx.isChild != 1
+and mx.isDuplicate = 0
+and mx.category not in ('Exclude From Mint')
+and done.id is null -- incremental matching
 ) mcand
 join (
- select distinct * from (
-  select guid, post_date, account_guid, account, value_num, description from tx_desc
+ select distinct gc0.* from (
+  select guid, tx_guid, post_date, account_guid, account, value_num, description from tx_desc
   union all
-  select guid, post_date, account_guid, account, value_num, memo description from tx_desc
+  select guid, tx_guid, post_date, account_guid, account, value_num, memo description from tx_desc
   where memo is not null
   union all
-  select guid, post_date, account_guid, account, value_num, ofx_memo description from tx_desc
+  select guid, tx_guid, post_date, account_guid, account, value_num, ofx_memo description from tx_desc
   where ofx_memo is not null
- ) gc0 where account in (select distinct account from minttrx)
+ ) gc0
+left join mint_gc_matches done on done.guid = gc0.guid
+ where gc0.account in (select distinct account from minttrx)
+and done.guid is null -- incremental matching
 ) gcand
 on timestampdiff(day, gcand.post_date, mcand.date) between -12 and 10 -- mcand.date = cast(gcand.post_date as date)
 and mcand.account = gcand.account
 -- todo: chase down full memos
 and substr(mcand.description, 1, 32) = substr(gcand.description, 1, 32)
 and mcand.amount * 100 = gcand.value_num
-join accounts cat on cat.name = mcand.category;
+join accounts cat on cat.code = mcand.categoryId;
 
 
 -- eyeball the results:
 -- select * from mint_gc_matches;
+
 
 /* If a given gnucash split matches mint transactions with different dates,
    delete all but the closest in time. */
@@ -263,7 +274,22 @@ from mint_gc_matches bad
 join mint_gc_matches mm
   on mm.guid = bad.guid
 and abs(mm.ddelta) < abs(bad.ddelta)) bad
-where mm.id = bad.id and mm.guid = bad.guid;
+on bad.guid = mm.guid and bad.id = mm.id;
+
+/* Likewise if a mint trx matches better and worse, delete the worse match. */
+delete mm from mint_gc_matches mm
+join (
+-- select *
+select bad.guid, bad.id
+from mint_gc_matches bad
+join mint_gc_matches mm
+  on mm.id = bad.id
+and abs(mm.ddelta) < abs(bad.ddelta)) bad
+on mm.id = bad.id and mm.guid = bad.guid;
+
+-- We should be able to create this unique index, though we don't use it for anything.
+-- create unique index mgc_idid on mint_gc_matches (id, guid);
+-- alter table mint_gc_matches drop index mgc_idid;
 
 /* Of the remaining dups, this shows any ambiguities in the resulting categories.
  * None. Yay. */
@@ -272,12 +298,12 @@ select count(*), id from (
     -- This subquery lets you eyeball the few remaining dups.
     select qty, mm.id id_check, category cat_check, mm.* from (
       select count(*) qty, id
-      from mint_gc_matches
+      from (select distinct id, guid from mint_gc_matches) x
       group by id
       having count(*) > 1
       order by 1 desc) dups
     join mint_gc_matches mm on dups.id = mm.id
-    order by mm.id) dups
+    order by mm.id) dup_details
   ) x
 group by id
 having count(*) > 1;
@@ -292,6 +318,7 @@ from minttrx mx
 left join mint_gc_matches mm
   on mm.id = mx.id
 where mm.id is null
+  and mx.isChild = 0
   -- spaces, &
   and mx.id not in ('296017984', '295931876', '298228734', '305034939', '311162603', '384319337', '384319338')
   -- beginning of my epoch
@@ -304,39 +331,106 @@ where mm.id is null
   and mx.account not in ('Costco TrueEarnings Card', 'SAVINGS', 'Home Depot CC')
 order by mx.date;
 
-/* And now the moment we've all been waiting for...
-what are we about to update?
-
-Ugh... I'm missing cat_split_guid */
-select cat.name ocat, category, cat_split.value_num / cat_split.value_denom, mm.*
-from mint_gc_matches mm
+/* Find the category split, provided it hasn't been refined yet. */
+update mint_gc_matches mm
 join splits spa on mm.guid = spa.guid
 join transactions tx on spa.tx_guid = tx.guid
 join splits cat_split on cat_split.tx_guid = tx.guid
  and cat_split.value_num = - spa.value_num
 join accounts cat on cat_split.account_guid = cat.guid
-where cat.account_type in ('CASH', 'INCOME', 'EXPENSE')
- and cat_split.account_guid != mm.cat_guid
-and mm.parts=1
-order by mm.post_date, cat_split.guid;
+set mm.cat_split_guid = cat_split.guid
+where mm.cat_split_guid is null;
+/* TODO: get post_date to hold still. */
+update mint_gc_matches mm
+join transactions tx on mm.tx_guid = tx.guid
+set mm.post_date = tx.post_date;
 
+/* For each matching parent, generate matches for children
+   with made up cat_split_guid's. */
+insert into mint_gc_matches
+select mmp.guid, mmp.tx_guid, mmp.post_date, mmp.ddelta, mxch.id
+     , null children, mmp.date, mmp.account, mmp.description
+     , case when mxch.isDebit then -mxch.amount else mxch.amount end amount
+     , mxch.categoryId, mxch.category
+     , cat.guid cat_guid
+     , mmp.account_guid
+     , replace(uuid(), '-', '') cat_split_guid
+from mint_gc_matches mmp
+join minttrx mxch on mxch.parent = mmp.id
+join accounts cat on cat.code = mxch.categoryId
+left join mint_gc_matches done on done.id = mxch.id
+where done.id is null;
+
+
+/* And now the moment we've all been waiting for...
+what are we about to update?*/
+select cat.name ocat, mm.category, mm.* from mint_gc_matches mm
+join splits cat_split on mm.cat_split_guid = cat_split.guid
+join accounts cat on cat.guid = cat_split.account_guid
+where cat.account_type in ('CASH', 'INCOME', 'EXPENSE') -- leave transfers alone
+ and cat_split.account_guid != mm.cat_guid;
 
 update splits cat_split
-join mintmatch mm on mm.cat_split_guid = cat_split.guid
-join mintexport mx on mm.mint_id = mx.id
+join mint_gc_matches mm on mm.cat_split_guid = cat_split.guid
+join minttrx mx on mm.id = mx.id
 join accounts cat on cat_split.account_guid = cat.guid
 set cat_split.account_guid = mm.cat_guid,
-cat_split.memo = mx.notes
-where cat.account_type in ('CASH', 'INCOME', 'EXPENSE')
--- todo: labels
-;
+    cat_split.memo = mx.note
+    -- todo: labels
+where cat.account_type in ('CASH', 'INCOME', 'EXPENSE');
 
--- TODO: clean up transaction descriptions for 1-N splits
+/* replace splits for 1-N split case */
+
+-- clean up from previous algorithm
+delete from splits where guid in (
+-- select * from tx_desc where guid in (
+select q1.guid from (
+select distinct spd.guid
+from splits spd
+join mintmatch mm on mm.cat_split_guid = spd.guid
+where mm.split_qty > 1) q1);
+-- 244 rows affected
+
+delete splits from splits
+join mint_gc_matches mmp on mmp.cat_split_guid = splits.guid
+join minttrx mxp on mxp.id = mmp.id
+where mxp.children is not null;
+-- 123 rows affected
+
+insert into splits
+select mm.cat_split_guid guid
+     , tx.guid tx_guid
+     , mm.cat_guid account_guid
+     , mx.note memo
+     , '' action
+     , 'n' reconcile_state, null reconcile_date
+     , mm.amount * -100 value_num, 100 value_denom
+     , mm.amount * -100 quantity_num, 100 quantity_denom
+     , null lot_guid
+--   , mx.date, mm.post_date, mx.description,mx.category, mx.account_name
+from mint_gc_matches mm
+join splits s on mm.guid = s.guid join transactions tx on tx.guid = s.tx_guid -- TODO: include tx_guid in mint_gc_matches
+join minttrx mx on mx.id = mm.id
+left join splits done on mm.cat_split_guid = done.guid
+where mx.isChild = 1
+and done.guid is null
+order by mm.post_date;
+
+/*TODO: clean up transaction descriptions
 update transactions tx
 join mintmatch mm on mm.tx_guid = tx.guid
 join mintexport mx on mm.mint_id = mx.id
 set tx.description = mx.description
 where mm.split_qty = 1;
+*/
+
+/* TODO: undo damage from false positives from earlier algorithm*/
+select * from mint_gc_matches mm
+join minttrx mx on mx.id = mm.id
+where mm.cat_split_guid is null
+and mx.isChild = 0
+and mx.children is null;
+
 
 /* manual clean-up */
 select * from mintexport mx
@@ -346,50 +440,6 @@ where
 mx.original_description like '%CULVER%'
 order by date;
 
-
-/* replace splits for 1-N split case */
-/* make new guids and keep track of them */
-update mintmatch
-set cat_split_guid = replace(uuid(), '-', '')
-where cat_split_guid is null;
-
-delete from splits where guid in (
-select distinct guid from (
-/* What to delete? */
-select sp.guid, tx.post_date
-     , mm.original_description, ofx_acct.name ofx_acct, oacct.name del_name, mm.category
-     , mm.amount, sp.value_num / sp.value_denom
-from mintmatch mm
-join transactions tx on mm.tx_guid = tx.guid
-join splits sp on sp.tx_guid = tx.guid
-join accounts oacct on oacct.guid = sp.account_guid
-join accounts ofx_acct on ofx_acct.guid = mm.acct_guid
-join splits ofx_split
-  on ofx_split.tx_guid = tx.guid
- and ofx_split.guid != sp.guid
- and ofx_split.account_guid = ofx_acct.guid
-where mm.split_qty > 1
-order by mm.post_date
-) old_splits );
-
-insert into splits
-select mm.cat_split_guid guid
-     , mm.tx_guid
-     , mm.cat_guid account_guid
-     , mx.notes memo
-     , '' action
-     , 'n' reconcile_state
-     , null reconcile_date
-     , mm.amount * -100 value_num
-     , 100 value_denom
-     , mm.amount * -100 quantity_num
-     , 100 quantity_denom
-     , null lot_guid
---   , mx.date, mm.post_date, mx.description,mx.category, mx.account_name
-from mintmatch mm
-join mintexport mx on mx.id = mm.mint_id
-where mm.split_qty > 1
-order by mm.post_date;
 
 /*
 
