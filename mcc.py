@@ -4,23 +4,39 @@
 import logging
 import urllib
 import json
+import getpass
 
 import mechanize
 
 log = logging.getLogger(__name__)
 
 def main(argv):
-    import sys
-
-    u, p = argv[1:3]
+    u, outf = argv[1:3]
+    out = open(outf, 'w')  # fail early
     c = MintCloudClient()
-    c.login(u, p)
+    c.login(u, getpass.getpass('Mint password for %s:' % u))
 
     #pprint.pprint(c.getCategories())
-    json.dump(c.allTransactions(), sys.stdout, ensure_ascii=False, indent=2)
+    flatten(c.allTransactions(), out)
+
+
+def flatten(arr, o):
+    o.write('[')
+    first = True
+    for item in arr:
+        if not first:
+            o.write(',\n')
+        else:
+            first = False
+        # TODO: make sure newlines in strings are escaped
+        o.write(json.dumps(item))
+    o.write(']')
 
 
 class MintCloudClient(mechanize.Browser):
+    '''
+    .. todo:: figure out how rnd works, i.e. whether it's required etc.
+    '''
     base = 'https://wwws.mint.com/'
 
     def login(self, username, password, pg='login.event'):
@@ -53,7 +69,7 @@ class MintCloudClient(mechanize.Browser):
         while 1:
             data = self.getJsonData(queryNew='',
                                     offset=offset,
-                                    filterType='cash',
+                                    filterType='cash',  # monkey see...
                                     comparableType=0,
                                     task='transactions',
                                     rnd=rnd)
@@ -65,7 +81,21 @@ class MintCloudClient(mechanize.Browser):
                       [txns[-1][f] for f in ('date', 'merchant', 'amount')])
             offset += len(txns)
 
+            for tx in txns:
+                if tx['isChild']:
+                    p = self.parent(tx['id'])
+                    tx['parent'] = p['id']
+                    # Oops... this may fetch the same parent more than once.
+                    # alltx should be a dict.
+                    alltx.append(p)
+
+
         return alltx
+
+    def parent(self, id, rnd='1325341961533',
+               path='listSplitTransactions.xevent'):
+        data = self.getJsonData(path=path, txnId='%s:0' % id, rnd=rnd)
+        return data['parent'][0]
 
     def listTransaction(self, queryNew='', offset=0, filterType='cash',
                         comparableType=3, rnd='1325292983068',

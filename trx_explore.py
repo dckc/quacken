@@ -55,9 +55,10 @@ def load(fp, engine):
     Base.metadata.create_all(engine)
     s = Session(bind=engine)
 
-    for o in data:
+    # parents may be repeated in data, so convert to dict
+    for o in dict([(o['id'], o) for o in data]).values():
         s.add(mktrx(o))
-    
+
     for trx, label, name in [(tx['id'], l['id'], l['name'])
                              for tx in data
                              for l in tx['labels']]:
@@ -65,18 +66,23 @@ def load(fp, engine):
 
     s.commit()
 
+    return s
+
+
+def show_stats(s, limit=15):
     pprint.pprint(s.execute('''
         select count(*), merchant
         from minttrx
         group by merchant
         order by 1 desc
-        ''').fetchall())
+        ''').fetchmany(limit))
     pprint.pprint(s.execute('''
         select count(*), label, name
         from minttag
         group by label, name
         order by 1 desc
-        ''').fetchall())
+        ''').fetchmany(limit))
+
 
 
 def show_labels(data):
@@ -98,7 +104,9 @@ def mktrx(o):
     this_year = datetime.date.today().year
     return MintTrx(**dict(fields,
                           date=mkdate(o['date'], this_year),
-                          amount=amount))
+                          amount=amount,
+                          children=len(o.get('children', [])) or None))
+
 
 def mkdate(txt, this_year):
     '''
@@ -144,17 +152,19 @@ class MintTrx(Base):
     id = Column(Integer, primary_key=True)
 
     account = Column(Name)
-    amount = Column(Money)
-    category = Column(Name)
-    categoryId = Column(Integer)
-    date = Column(Date)
+    amount = Column(Money, nullable=False)
+    category = Column(Name, nullable=False)
+    categoryId = Column(Integer, nullable=False)
+    date = Column(Date, nullable=False)
     fi = Column(Name)
     #inlineadviceid = Column(String)
     #isAfterFiCreationTime = Column(String)
     isCheck = Column(Boolean)
-    isChild = Column(Boolean)
-    isDebit = Column(Boolean)
-    isDuplicate = Column(Boolean)
+    isChild = Column(Boolean, nullable=False)
+    parent = Column(Integer)
+    children = Column(Integer)  # normalized a bit
+    isDebit = Column(Boolean, nullable=False)
+    isDuplicate = Column(Boolean, nullable=False)
     isEdited = Column(Boolean)
     #isFirstDate = Column(String)
     #isLinkedToRule = Column(String)
@@ -170,7 +180,7 @@ class MintTrx(Base):
     note = Column(FreeText)
     #numberMatchedByRule = Column(String)
     odate = Column(Name)
-    omerchant = Column(FreeText)
+    omerchant = Column(FreeText, nullable=False)
     #ruleCategory = Column(String)
     #ruleCategoryId = Column(String)
     #ruleMerchant = Column(String)
@@ -389,8 +399,9 @@ def main(argv):
         explore(open(trxfn))
     elif '--load' in argv:
         trxfn, dburl = argv[2:4]
-        load(open(trxfn),
-             sqlalchemy.create_engine(dburl))
+        s = load(open(trxfn),
+                 sqlalchemy.create_engine(dburl))
+        show_stats(s)
     elif '--match' in argv:
         dbfn = argv[2]
         match(sqlalchemy.create_engine('sqlite:///' + dbfn))
