@@ -1,12 +1,35 @@
 use dm93finance;
 SET sql_safe_updates=0;
 
+/* Flag parents by counting children. */
+/* Parents don't come with accounts. Fill in from children. */
+update minttrx p set p.children=null;
+update minttrx p
+join (
+  select count(*) qty, min(account) account, parent
+  from minttrx
+  where parent is not null
+  group by parent) ea
+on ea.parent = p.id
+set p.children = ea.qty,
+p.account = ea.account;
+
+/* Eyeball parents and children. */
+select * from minttrx
+where children > 0 or isChild = 1
+order by date, (case when isChild=1 then parent else id end);
+
+/****************************
+ * Accounts
+ */
+
 /* We need unique names for accounts for this work. */
 create unique index accounts_name on accounts (name(250));
 
 /* We assume any mint transactions whose accounts (e.g. Cash) don't match
  * existing gnucash accounts by name can be ignored. Eyeball them: */
-select * from minttrx where account in (
+select * from minttrx
+where children is null and account in (
 
 select ma.* from
 (select distinct account from minttrx) ma
@@ -18,36 +41,8 @@ where ga.name is null
 -- guid column is only 32 chars long
 select length(replace(uuid(), '-', ''));
 
-/* Ensure accounts mentioned in transactions are in gnucash.
- * This design pre-dates the availability of the canonical mint account data,
- * so it's kinda wonky.
- */
-insert into accounts
-select replace(uuid(), '-', '') as guid
-     , mc.category as name
-     , mc.account_type
-     , usd.guid as commodity_guid
-     , usd.fraction as commodity_scu
-     , 0 as non_std_scu
-     , parent.guid as parent_guid
-     , '' as code
-     , '' as description
-     , 0 as hidden
-     , 0 as placeholder
-from (select category, case when tot > 0 then 'INCOME' else 'EXPENSE' end as account_type
-   from (
-     select category
-          , sum(amount * case when isDebit = 1 then -1 else 1 end) as tot
-     from minttrx
-     group by category) x) mc
-join commodities usd on usd.mnemonic='USD'
-join accounts parent on parent.name=
-   case when mc.account_type = 'EXPENSE' then 'Spending' else 'Income' end
-order by 3, 2;
--- 124 row(s) affected
-
 /* Now that we have the JSON category data from mint... */
-drop table mint_budget_categories;
+drop table if exists mint_budget_categories;
 create table mint_budget_categories (
 id	int /* not null auto_increment*/,
 category varchar(80),
@@ -70,54 +65,104 @@ update mint_budget_categories
 set subcategory = null
 where subcategory = '';
 
-/* ensure all parent accounts exist*/
+create or replace view mint_categories as
+select sub.id, sub.subcategory category
+     , case super.category
+       when 'Income' then 'INCOME'
+       when 'Transfer' then 'ASSET'
+       else 'EXPENSE'
+       end as account_type
+     , super.id parent, super.category parent_name
+from mint_budget_categories sub
+join mint_budget_categories super on sub.category=super.category
+where sub.subcategory is not null
+ and super.subcategory is null
+union all
+select id, category
+     , case category
+       when 'Income' then 'INCOME'
+       when 'Transfer' then 'ASSET'
+       else 'EXPENSE' end
+     , null, null
+from mint_budget_categories
+where subcategory is null;
+
+/* check transaction categoryId against budget categories */
+select case when qty = 0 then 1 else 1/0 end all_trx_cats_match
+from (
+  select count(*) qty
+  from (
+    select mx.* from minttrx mx
+    left join mint_categories mc
+    on mx.categoryId = mc.id
+  where mc.id is null) mismatches ) tally;
+
+-- any categories that we used not in gnucash?
+select mc.* from mint_categories mc
+left join accounts a on a.code = mc.id
+where a.code is null
+and mc.id in (select distinct categoryId from minttrx) -- actually used
+;
+
+
+/* Set up top level accounts. */
 insert into accounts
 select replace(uuid(), '-', '') as guid
-     , mc.category as name
-     , 'EXPENSE' account_type
-     , usd.guid as commodity_guid
-     , usd.fraction as commodity_scu
-     , 0 as non_std_scu
-     , parent.guid as parent_guid
-     , '' as code
-     , '' as description
-     , 0 as hidden
-     , 0 as placeholder
-from mint_budget_categories mc
-join accounts parent on parent.name = 'Mint Expenses'
+     , mc.category as name, mc.account_type
+     , usd.guid as commodity_guid, usd.fraction as commodity_scu, 0 as non_std_scu
+     , ap.guid as parent_guid
+     , mc.id as code
+     , '' as description, 0 as hidden, 0 as placeholder
+from mint_categories mc
+join accounts ap on ap.name =
+  case mc.account_type
+  -- we assume gnucash accounts with these names have been pre-arranged
+  when 'EXPENSE' then 'Spending'
+  when 'INCOME' then 'Income'
+  when 'ASSET' then 'Current'
+  end
 join commodities usd on usd.mnemonic = 'USD'
-where subcategory is null
-and category not in (select name from accounts);
+where mc.parent is null
+and mc.category not in (select name from accounts) -- not yet created
+;
 
-/* Use gnucash account.code to correlate with mint categories. */
-update
--- select * from
- accounts a
-join (
-select id, category
-from mint_budget_categories
-where subcategory is null
-union
-select id, subcategory
-from mint_budget_categories
-where subcategory is not null) mc
-on mc.category = a.name
-set a.code = mc.id
+/* Set up 2nd level accounts. */
+insert into accounts
+select replace(uuid(), '-', '') as guid
+     , mc.category as name, mc.account_type
+     , usd.guid as commodity_guid, usd.fraction as commodity_scu, 0 as non_std_scu
+     , ap.guid as parent_guid
+     , mc.id as code
+     , '' as description, 0 as hidden, 0 as placeholder
+from mint_categories mc
+join accounts ap on ap.code = mc.parent
+join commodities usd on usd.mnemonic = 'USD'
+and mc.id in (select distinct categoryId from minttrx) -- actually used
+and mc.category not in (select name from accounts) -- not yet created
 ;
 
 
-/* organize gnucash accounts according to mint structure */
-update
--- select p.name, a.name from
+/* Check for pre-existing gnucash categories with matching names but mismatched codes. */
+-- update
+select * from
 accounts a
-join mint_budget_categories mc
-  on mc.subcategory = a.name
- and a.account_type in ('INCOME', 'EXPENSE')
-join accounts p
-  on mc.category = p.name
--- order by p.name, a.name
-set a.parent_guid = p.guid
+join mint_categories mc on mc.category = a.name
+where a.code != mc.id
+-- set a.code = mc.id
 ;
+
+select * from mint_categories mc join accounts a on mc.id = a.code
+join accounts p on p.code = mc.parent
+where mc.parent is not null and a.parent_guid != p.guid
+and parent_name != 'Transfer' -- these are assets/liabilities, which mint doesn't really grok
+and parent_name != 'Financial' -- I used ths mint expense category for things that are really assets/liabilities
+and category != 'Personal Loan' -- this looked like income in mint, but clearly it's not
+;
+
+
+/****************************
+ * Transactions
+ */
 
 /* Aside: Which transactions from mint accounts don't have OFX online_id's?
  * They seem to all be transfers, which I think I messed around with manually. */
@@ -129,33 +174,12 @@ join accounts a on s.account_guid = a.guid
 left join slots on slots.obj_guid = s.guid and slots.name = 'online_id'
 where slots.obj_guid is null;
 
-/* Flag parents by counting children. */
-update minttrx p set p.children=null;
-update minttrx p
-join (
-  select count(*) qty, parent
-  from minttrx
-  where parent is not null
-  group by parent) ea
-on ea.parent = p.id
-set p.children = ea.qty;
-
-/* Eyeball parents and children. */
-select * from minttrx
-where children > 0 or isChild = 1
-order by date, (case when isChild=1 then parent else id end);
-
-
-/* Just a few dups of this sort... */
-select count(*), date, account, omerchant, isDebit, amount
-from minttrx
-group by date, account, omerchant, isDebit, amount
-having count(*) > 1
-order by date desc;
 
 -- alter table minttrx drop index minttrx_sig;
-create index minttrx_sig on minttrx (account, omerchant);
+-- create index minttrx_sig on minttrx (account, omerchant);
 
+/* Find various descriptions of each transaction split.
+ * Denormalize a bit, while we're at it. */
 create or replace view tx_desc as
 select spa.guid, tx.post_date, a.guid account_guid, a.name account, value_num
      /* My bank repeats the OFX NAME in the MEMO, but Discover doesn't Ugh. */
@@ -438,6 +462,11 @@ left join mintmatch mm on mm.cat_split_guid = sp.guid;
 
 select * from mint_re_export
 order by to_days(post_date) desc, mint_id;
+
+select mx.category, mx.categoryId
+from minttrx mx
+left join accounts a on a.code = mx.categoryId
+where a.code is null;
 
 select date, description, original_description
      , amount, transaction_type, category, account_name
