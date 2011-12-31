@@ -17,7 +17,7 @@ def main(argv):
     c.login(u, p)
 
     #pprint.pprint(c.getCategories())
-    json.dumps(c.allTransactions(), sys.stdout, ensure_ascii=False, indent=2)
+    json.dump(c.allTransactions(), sys.stdout, ensure_ascii=False, indent=2)
 
 
 class MintCloudClient(mechanize.Browser):
@@ -61,6 +61,8 @@ class MintCloudClient(mechanize.Browser):
             if not txns:
                 break
             alltx.extend(txns)
+            log.debug('txn #%d: %s', offset,
+                      [txns[-1][f] for f in ('date', 'merchant', 'amount')])
             offset += len(txns)
 
         return alltx
