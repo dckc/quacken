@@ -166,15 +166,26 @@ and category != 'Personal Loan' -- this looked like income in mint, but clearly 
  * Transactions
  */
 
-/* Aside: Which transactions from mint accounts don't have OFX online_id's?
- * They seem to all be transfers, which I think I messed around with manually. */
-select tx.post_date, a.name, s.memo, s.value_num / s.value_denom amount
+create or replace view tx_split_detail as
+select tx.post_date, a.name account_name, tx.description, s.memo, s.value_num / s.value_denom amount
+     , tx.guid tx_guid, s.guid split_guid, a.guid account_guid, value_num
 from transactions tx
 join splits s on s.tx_guid = tx.guid
-join accounts a on s.account_guid = a.guid
- and a.name in (select distinct account from minttrx)
-left join slots on slots.obj_guid = s.guid and slots.name = 'online_id'
-where slots.obj_guid is null;
+join accounts a on s.account_guid = a.guid;
+
+/* Check balances */
+select sum(amount), account_name
+from tx_split_detail
+group by name
+order by name;
+
+/* Aside: Which transactions from mint accounts don't have OFX online_id's?
+ * They seem to all be transfers, which I think I messed around with manually. */
+select td.*
+from tx_split_detail td
+left join slots on slots.obj_guid = td.split_guid and slots.name = 'online_id'
+where td.account_name in (select distinct account from minttrx)
+and slots.obj_guid is null;
 
 
 -- alter table minttrx drop index minttrx_sig;
@@ -183,19 +194,17 @@ where slots.obj_guid is null;
 /* Find various descriptions of each transaction split.
  * Denormalize a bit, while we're at it. */
 create or replace view tx_desc as
-select spa.guid, tx.guid tx_guid, tx.post_date, a.guid account_guid, a.name account, value_num
+select td.split_guid guid, td.tx_guid, td.post_date, td.account_guid, td.account_name account, td.value_num
      /* My bank repeats the OFX NAME in the MEMO, but Discover doesn't Ugh. */
-     , tx.description
-     , case when spa.memo > '' then spa.memo else null end memo
+     , td.description
+     , case when td.memo > '' then td.memo else null end memo
      , case when ofxmemo.obj_guid is not null and ofxmemo.string_val like '%Memo:%'
        then substring_index(ofxmemo.string_val, 'Memo:', -1)
        else null
        end ofx_memo
-from transactions tx
-join splits spa on spa.tx_guid = tx.guid
-left join slots ofxmemo on ofxmemo.obj_guid = tx.guid
-     and ofxmemo.name = 'notes'
-join accounts a on spa.account_guid = a.guid;
+from tx_split_detail td
+left join slots ofxmemo on ofxmemo.obj_guid = td.tx_guid
+     and ofxmemo.name = 'notes';
 
 drop table if exists mint_gc_matches;
 create table mint_gc_matches (
@@ -318,17 +327,18 @@ from minttrx mx
 left join mint_gc_matches mm
   on mm.id = mx.id
 where mm.id is null
-  and mx.isChild = 0
+  and mx.isChild = 0 and mx.children is null
   -- spaces, &
   and mx.id not in ('296017984', '295931876', '298228734', '305034939', '311162603', '384319337', '384319338')
   -- beginning of my epoch
   and mx.date > date '2010-06-30'
   and mx.category not in ('Exclude From Mint')
   -- I have only reconciled one month of discover
-  and not (mx.account = 'Discover' and mx.date > date '2010-07-14')
+  and not (mx.account = 'Discover' and mx.date > date '2011-12-14') -- '2010-07-14'
   and not (mx.account = 'PERFORMANCE CHECKING' and mx.date > date '2011-11-16')
   -- haven't done these
   and mx.account not in ('Costco TrueEarnings Card', 'SAVINGS', 'Home Depot CC')
+  and mx.category not in ('Credit Card Payment')
 order by mx.date;
 
 /* Find the category split, provided it hasn't been refined yet. */
