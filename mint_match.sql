@@ -188,11 +188,12 @@ where td.account_name in (select distinct account from minttrx)
 and slots.obj_guid is null;
 
 
+
 -- alter table minttrx drop index minttrx_sig;
 -- create index minttrx_sig on minttrx (account, omerchant);
 
 /* Find various descriptions of each transaction split.
- * Denormalize a bit, while we're at it. */
+ * DEAD CODE */
 create or replace view tx_desc as
 select td.split_guid guid, td.tx_guid, td.post_date, td.account_guid, td.account_name account, td.value_num
      /* My bank repeats the OFX NAME in the MEMO, but Discover doesn't Ugh. */
@@ -212,6 +213,7 @@ create table mint_gc_matches (
  tx_guid varchar(32) not null,
  post_date timestamp not null,
  ddelta int not null,
+ txtscore int not null,
  id int not null,
  children int,
  date date not null,
@@ -227,17 +229,50 @@ create table mint_gc_matches (
 create index mgm_id on mint_gc_matches (id);
 create index mgm_guid on mint_gc_matches (guid);
 
+/* retrofit txtscore */
+update mint_gc_matches mm join (
+select mx.date
+     , case
+       when instr(mx.omerchant, 'Check #') = 1
+        and instr(ofxmemo.string_val, substr(mx.omerchant, 1, length('Check #9999'))) then 1000
+       when instr(ofxmemo.string_val, mx.omerchant) > 0 then length(mx.omerchant)
+       when instr(mx.omerchant, td.description) > 0 then length(td.description)
+       when instr(mx.omerchant, replace(td.description, "'", '')) > 0 then length(td.description)
+       else null
+       end txtscore
+     , mx.account, mx.omerchant, td.description, ofxmemo.string_val
+     , mm.id, mm.guid
+from mint_gc_matches mm
+join minttrx mx on mx.id = mm.id
+join tx_split_detail td on td.split_guid = mm.guid
+join slots ofxmemo on ofxmemo.obj_guid = td.tx_guid
+     and ofxmemo.name = 'notes'
+-- order by 2
+) q on mm.id = q.id and mm.guid = q.guid
+set mm.txtscore = q.txtscore;
+
 insert into mint_gc_matches (
-  guid, tx_guid, post_date, ddelta, id, children, date, account, description, amount
+  guid, tx_guid, post_date, ddelta, txtscore, id, children, date, account, description, amount
 , categoryId, category, cat_guid, account_guid)
-select distinct gcand.guid, gcand.tx_guid, gcand.post_date, timestampdiff(day, gcand.post_date, mcand.date) ddelta
+select * from (
+select gcand.guid, gcand.tx_guid, gcand.post_date
+     , timestampdiff(day, gcand.post_date, mcand.date) ddelta
+     , case
+       -- checks trump
+       when instr(mcand.omerchant, 'Check #') = 1
+        -- patch goofy Check #1234 #1234 case
+        and instr(gcand.ofx_memo, substr(mcand.omerchant, 1, length('Check #9999'))) then 1000
+       when instr(gcand.ofx_memo, mcand.omerchant) > 0 then length(mcand.omerchant)
+       when instr(mcand.omerchant, gcand.description) > 0 then length(gcand.description)
+       -- match Sam's Club to SAMS CLUB
+       when instr(mcand.omerchant, replace(gcand.description, "'", '')) > 0 then length(gcand.description)
+       -- try without spaces
+       when instr(replace(mcand.omerchant, ' ', ''), replace(gcand.description, ' ', '')) > 0 then length(gcand.description)
+       else null
+       end txtscore
      , mcand.*, cat.guid cat_guid, account_guid
 from (
-select mx.id, mx.children, mx.date, mx.account
-     /* patch wierd Check #nnnn #nnnn */
-     , case when mx.omerchant like 'Check #% #%'
-       then substr(mx.omerchant, 1, length('Check #9999'))
-       else mx.omerchant end description
+select mx.id, mx.children, mx.date, mx.account, mx.omerchant
      , case when mx.isDebit = 1 then - mx.amount else mx.amount end amount
      , mx.categoryId, mx.category
 from minttrx mx
@@ -248,25 +283,22 @@ and mx.category not in ('Exclude From Mint')
 and done.id is null -- incremental matching
 ) mcand
 join (
- select distinct gc0.* from (
-  select guid, tx_guid, post_date, account_guid, account, value_num, description from tx_desc
-  union all
-  select guid, tx_guid, post_date, account_guid, account, value_num, memo description from tx_desc
-  where memo is not null
-  union all
-  select guid, tx_guid, post_date, account_guid, account, value_num, ofx_memo description from tx_desc
-  where ofx_memo is not null
- ) gc0
-left join mint_gc_matches done on done.guid = gc0.guid
- where gc0.account in (select distinct account from minttrx)
+ select td.split_guid guid, td.tx_guid, td.post_date
+      , td.account_guid, td.account_name account, td.value_num
+      , td.description, ofxmemo.string_val ofx_memo
+ from tx_split_detail td
+ left join slots ofxmemo on ofxmemo.obj_guid = td.tx_guid
+     and ofxmemo.name = 'notes'
+ left join mint_gc_matches done on done.guid = td.split_guid
+ where td.account_name in (select distinct account from minttrx)
 and done.guid is null -- incremental matching
 ) gcand
 on timestampdiff(day, gcand.post_date, mcand.date) between -12 and 10 -- mcand.date = cast(gcand.post_date as date)
 and mcand.account = gcand.account
 -- todo: chase down full memos
-and substr(mcand.description, 1, 32) = substr(gcand.description, 1, 32)
 and mcand.amount * 100 = gcand.value_num
-join accounts cat on cat.code = mcand.categoryId;
+join accounts cat on cat.code = mcand.categoryId) mgmatch
+where txtscore is not null;
 
 
 -- eyeball the results:
@@ -429,9 +461,11 @@ order by mm.post_date;
 /*TODO: clean up transaction descriptions */
 update transactions tx
 join mint_gc_matches mm on mm.tx_guid = tx.guid
-join minttrx mx on mm.mint_id = mx.id
-set tx.description = mx.description
-where mx.isChild = 0 and mx.children is null;
+join minttrx mx on mm.id = mx.id
+set tx.description = mx.merchant
+where
+-- mx.isChild = 0 and
+mx.children is null;
 
 
 /* TODO: undo damage from false positives from earlier algorithm*/
@@ -495,7 +529,9 @@ select date_format(
        case when tx.post_date < date '2011-04-20'
        then date_add(tx.post_date, interval - 1 day)
        else tx.post_date end, '%c/%d/%Y') as date
-     , tx.description
+     -- TODO: clean up descriptions?
+     , case when mx.merchant is null then tx.description
+       else tx.description end description
      , sp0.memo as original_description
      , round(abs(sp.value_num / sp.value_denom), 2) amount
      , case when sp.value_num > 0 then 'debit' else 'credit' end as transaction_type
@@ -518,7 +554,9 @@ join splits sp0 on sp0.tx_guid = tx.guid
 join slots ofx_id on ofx_id.name = 'online_id'
  and ofx_id.obj_guid = sp0.guid
 join accounts on accounts.guid = sp0.account_guid
-left join mint_gc_matches mm on mm.cat_split_guid = sp.guid;
+left join mint_gc_matches mm on mm.cat_split_guid = sp.guid
+left join minttrx mx on mx.id = mm.id -- kludge for descriptions for now
+;
 
 select * from mint_re_export
 order by to_days(post_date) desc, mint_id;
