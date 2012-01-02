@@ -213,7 +213,6 @@ create table mint_gc_matches (
  tx_guid varchar(32) not null,
  post_date timestamp not null,
  ddelta int not null,
- txtscore int not null,
  id int not null,
  children int,
  date date not null,
@@ -224,7 +223,8 @@ create table mint_gc_matches (
  category varchar(80) not null,
  cat_guid varchar(32) not null,
  account_guid varchar(32) not null,
- cat_split_guid varchar(32)
+ cat_split_guid varchar(32),
+ txtscore int not null
 );
 create index mgm_id on mint_gc_matches (id);
 create index mgm_guid on mint_gc_matches (guid);
@@ -334,7 +334,8 @@ on mm.id = bad.id and mm.guid = bad.guid;
 
 /* Of the remaining dups, this shows any ambiguities in the resulting categories.
  * None. Yay. */
-select count(*), id from (
+select qty, mx.* from (
+select count(*) qty, id from (
   select distinct id, category from (
     -- This subquery lets you eyeball the few remaining dups.
     select qty, mm.id id_check, category cat_check, mm.* from (
@@ -347,7 +348,18 @@ select count(*), id from (
     order by mm.id) dup_details
   ) x
 group by id
-having count(*) > 1;
+having count(*) > 1) dups
+join minttrx mx on mx.id = dups.id;
+
+/* ew... where did these come from?
+   Ah... found it. */
+delete mm from mint_gc_matches mm
+join (
+select mm.*
+from mint_gc_matches mm
+left join minttrx mx on mm.id = mx.id
+where mx.id is null
+) bad on bad.id=mm.id and bad.guid=mm.guid;
 
 -- TODO: fix 'Dave &amp; Buster''s'
 -- TODO: update tx.description using full ofx memo
@@ -397,12 +409,12 @@ select mmp.guid, mmp.tx_guid, mmp.post_date, mmp.ddelta, mxch.id
      , cat.guid cat_guid
      , mmp.account_guid
      , replace(uuid(), '-', '') cat_split_guid
+     , mmp.txtscore
 from mint_gc_matches mmp
 join minttrx mxch on mxch.parent = mmp.id
 join accounts cat on cat.code = mxch.categoryId
 left join mint_gc_matches done on done.id = mxch.id
 where done.id is null;
-
 
 /* And now the moment we've all been waiting for...
 what are we about to update?*/
@@ -410,7 +422,8 @@ select cat.name ocat, mm.category, mm.* from mint_gc_matches mm
 join splits cat_split on mm.cat_split_guid = cat_split.guid
 join accounts cat on cat.guid = cat_split.account_guid
 where cat.account_type in ('CASH', 'INCOME', 'EXPENSE') -- leave transfers alone
- and cat_split.account_guid != mm.cat_guid;
+ and cat_split.account_guid != mm.cat_guid
+and mm.children is null;
 
 update splits cat_split
 join mint_gc_matches mm on mm.cat_split_guid = cat_split.guid
@@ -419,11 +432,12 @@ join accounts cat on cat_split.account_guid = cat.guid
 set cat_split.account_guid = mm.cat_guid,
     cat_split.memo = mx.note
     -- todo: labels
-where cat.account_type in ('CASH', 'INCOME', 'EXPENSE');
+where cat.account_type in ('CASH', 'INCOME', 'EXPENSE')
+and mm.children is null;
 
 /* replace splits for 1-N split case */
 
--- clean up from previous algorithm
+/*clean up from previous algorithm
 delete from splits where guid in (
 -- select * from tx_desc where guid in (
 select q1.guid from (
@@ -432,16 +446,19 @@ from splits spd
 join mintmatch mm on mm.cat_split_guid = spd.guid
 where mm.split_qty > 1) q1);
 -- 244 rows affected
+*/
 
-delete splits from splits
+update splits
+-- select *
 join mint_gc_matches mmp on mmp.cat_split_guid = splits.guid
 join minttrx mxp on mxp.id = mmp.id
+set value_num = 0, quantity_num=0
 where mxp.children is not null;
 -- 123 rows affected
 
 insert into splits
 select mm.cat_split_guid guid
-     , tx.guid tx_guid
+     , mm.tx_guid
      , mm.cat_guid account_guid
      , mx.note memo
      , '' action
@@ -451,12 +468,26 @@ select mm.cat_split_guid guid
      , null lot_guid
 --   , mx.date, mm.post_date, mx.description,mx.category, mx.account_name
 from mint_gc_matches mm
-join splits s on mm.guid = s.guid join transactions tx on tx.guid = s.tx_guid -- TODO: include tx_guid in mint_gc_matches
 join minttrx mx on mx.id = mm.id
 left join splits done on mm.cat_split_guid = done.guid
 where mx.isChild = 1
 and done.guid is null
 order by mm.post_date;
+
+/* clean up leftovers from earlier split inserts. */
+delete bad
+-- select *
+from splits bad
+join mint_gc_matches mm on bad.tx_guid = mm.tx_guid
+ and bad.account_guid = mm.cat_guid
+ and bad.value_num = -100 * mm.amount
+left join mint_gc_matches done
+on done.cat_split_guid = bad.guid
+where done.guid is null
+;
+select * from tx_split_detail td
+left join mint_gc_matches mm on mm.cat_split_guid = td.split_guid
+ where td.memo='tool bandit';
 
 /*TODO: clean up transaction descriptions */
 update transactions tx
