@@ -251,6 +251,7 @@ join slots ofxmemo on ofxmemo.obj_guid = td.tx_guid
 ) q on mm.id = q.id and mm.guid = q.guid
 set mm.txtscore = q.txtscore;
 
+
 insert into mint_gc_matches (
   guid, tx_guid, post_date, ddelta, txtscore, id, children, date, account, description, amount
 , categoryId, category, cat_guid, account_guid)
@@ -263,7 +264,9 @@ select gcand.guid, gcand.tx_guid, gcand.post_date
         -- patch goofy Check #1234 #1234 case
         and instr(gcand.ofx_memo, substr(mcand.omerchant, 1, length('Check #9999'))) then 1000
        when instr(gcand.ofx_memo, mcand.omerchant) > 0 then length(mcand.omerchant)
-       when instr(mcand.omerchant, gcand.description) > 0 then length(gcand.description)
+       when instr(mcand.omerchant, gcand.description) = 1 then length(gcand.description)
+       when instr(gcand.description, mcand.omerchant) = 1 then length(gcand.description)
+       when instr(replace(mcand.omerchant, '&apos;', '\''), gcand.description) = 1 then length(gcand.description)
        -- match Sam's Club to SAMS CLUB
        when instr(mcand.omerchant, replace(gcand.description, "'", '')) > 0 then length(gcand.description)
        -- try without spaces
@@ -419,10 +422,10 @@ where done.id is null;
 /* And now the moment we've all been waiting for...
 what are we about to update?*/
 select cat.name ocat, mm.category, mm.* from mint_gc_matches mm
-join splits cat_split on mm.cat_split_guid = cat_split.guid
-join accounts cat on cat.guid = cat_split.account_guid
+join tx_split_detail td on mm.cat_split_guid = td.split_guid
+join accounts cat on cat.guid = td.account_guid
 where cat.account_type in ('CASH', 'INCOME', 'EXPENSE') -- leave transfers alone
- and cat_split.account_guid != mm.cat_guid
+ and td.account_guid != mm.cat_guid
 and mm.children is null;
 
 update splits cat_split
@@ -485,9 +488,6 @@ left join mint_gc_matches done
 on done.cat_split_guid = bad.guid
 where done.guid is null
 ;
-select * from tx_split_detail td
-left join mint_gc_matches mm on mm.cat_split_guid = td.split_guid
- where td.memo='tool bandit';
 
 /*TODO: clean up transaction descriptions */
 update transactions tx
@@ -508,6 +508,14 @@ and mx.children is null;
 
 
 /* manual clean-up */
+select * from tx_split_detail td
+left join mint_gc_matches mm on td.split_guid = mm.cat_split_guid
+left join minttrx mx on mx.amount = td.amount and abs(timestampdiff(day, td.post_date, mx.date))<3
+where td.amount = 8.38
+-- and td.post_date between date '2011-11-01' and date '2011-11-30'
+order by td.post_date;
+select * from minttrx where amount=20.00;
+
 select * from mintexport mx
 left join mintmatch mm on mm.mint_id = mx.id
 where
@@ -549,59 +557,161 @@ join accounts cc
 set s.account_guid = cc.guid
 ;
 
+drop table ax_tx;
+create temporary table ax_tx as
+select mxtx.id, mxtx.date, mxtx.omerchant, mxtx.account, mxtx.note, mxtx.isDebit, mxtx.amount
+     , replace(uuid(), '-', '') tx_guid, usd.guid currency_guid, '' num
+     , mxtx.date post_date, current_timestamp enter_date
+     , mxtx.merchant description
+from minttrx mxtx
+join commodities usd on usd.mnemonic = 'USD'
+where mxtx.account = 'Costco TrueEarnings Card'
+  and mxtx.isChild = 0
+and mxtx.date <= date '2011-02-05'
+order by mxtx.date
+;
+
+drop table ax_sp;
+create temporary table ax_sp as
+select replace(uuid(), '-', '') guid, mxtx.tx_guid
+      , a.guid account_guid
+      , case when mode = 'acct' then mxtx.omerchant
+        else mxcat.note end memo
+      , '' action
+      , 'n' reconcile_state, null reconcile_date
+      , 100 * (case
+          when mode = 'acct' then
+            case when mxtx.isDebit then -mxtx.amount else mxtx.amount end
+          else
+            case when mxcat.isDebit then mxcat.amount else -mxcat.amount end
+          end) value_num
+      , 100 value_denom
+      -- use an enclosing select to get quantity_num, quantity_denom
+      , null lot_guid
+from ax_tx as mxtx
+join (
+  select 'acct' mode
+  union all
+  select 'cat' mode) m
+left join minttrx mxcat on mode = 'cat' and (
+  (mxcat.isChild = 1 and mxcat.parent = mxtx.id)
+  or
+  (mxcat.children is null and mxcat.id = mxtx.id))
+join accounts a on a.name = case
+  when mode = 'acct' then mxtx.account
+  else mxcat.category end
+order by mxtx.date
+;
+select * from ax_tx;
+select * from ax_sp;
+select * from tx_split_detail
+where account_name = 'Groceries';
+insert into transactions (guid, currency_guid, num
+     , post_date, enter_date
+     , description)
+select   tx_guid, currency_guid, num
+     , post_date, enter_date
+     , description
+from ax_tx;
+insert into splits (guid, tx_guid
+      , account_guid
+      , memo
+      , action
+      , reconcile_state, reconcile_date
+      , value_num
+      , value_denom
+      , quantity_num
+      , quantity_denom
+      , lot_guid)
+select guid, tx_guid
+      , account_guid
+      , memo
+      , action
+      , reconcile_state, reconcile_date
+      , value_num
+      , value_denom
+      , value_num quantity_num
+      , value_denom quantity_denom
+      , lot_guid
+from ax_sp;
+
+
+
+select * from
+(
+select id, merchant description
+     , case when isDebit = 1 then -amount else amount end amount
+     , account, category
+     , isChild, parent, children
+from minttrx mx
+-- join accounts a on a.name = mx.account
+-- join accounts cat on cat.name = mx.category
+join commodities usd on usd.mnemonic = 'USD'
+where mx.account = 'Costco TrueEarnings Card'
+and mx.date <= date '2011-02-05'
+) mx
+join commodities usd on usd.mnemonic = 'USD'
+
+;
+
+select tx_guid, currency_guid, num, post_date, enter_date, description
+from (
+select mx.id, 'tx_guid@@' tx_guid, usd.guid currency_guid, '' num, date post_date, current_timestamp enter_date, merchant description
+and isChild = 0) tx
+join (
+select * from minttrx.mx
+);
+
 /* reproduce mint export
 select date_format(date '2010-07-26', '%m/%d/%Y');
 select round(13.6700, 2);
  */
 
 create or replace view mint_re_export as
-select date_format(
-       -- wierd... mint dates are off by 1 and then they're not.
-       case when tx.post_date < date '2011-04-20'
-       then date_add(tx.post_date, interval - 1 day)
-       else tx.post_date end, '%c/%d/%Y') as date
-     -- TODO: clean up descriptions?
-     , case when mx.merchant is null then tx.description
-       else tx.description end description
-     , sp0.memo as original_description
-     , round(abs(sp.value_num / sp.value_denom), 2) amount
-     , case when sp.value_num > 0 then 'debit' else 'credit' end as transaction_type
-     , cat.name as category
-     , accounts.name as account_name
-     , case when sp0.reconcile_state = 'y' then 'Audited' else '' end labels -- TODO
-     , sp.memo notes
-     , tx.post_date
-     , tx.guid as tx_guid
-     , sp0.guid as main_split_guid
-     , sp.guid as cat_split_guid
-     , mm.id -- for ordering
-from transactions tx
-join slots ofx on ofx.obj_guid = tx.guid and ofx.name = 'notes'
-join splits sp on sp.tx_guid = tx.guid
-join accounts cat on sp.account_guid = cat.guid
-join splits sp0 on sp0.tx_guid = tx.guid
- and sp0.memo = substring_index(ofx.string_val, 'Memo:', -1)
- and sp0.guid != sp.guid
-join slots ofx_id on ofx_id.name = 'online_id'
- and ofx_id.obj_guid = sp0.guid
-join accounts on accounts.guid = sp0.account_guid
-left join mint_gc_matches mm on mm.cat_split_guid = sp.guid
-left join minttrx mx on mx.id = mm.id -- kludge for descriptions for now
+select date_format(tda.post_date, '%c/%d/%Y') as date
+     , tda.description
+     , null original_description
+     , round(abs(tdc.amount), 2) amount
+     , case when tdc.amount > 0 then 'debit' else 'credit' end as transaction_type
+     , tdc.account_name category
+     , tda.account_name
+     , null labels
+     , tdc.memo notes
+     , tda.post_date
+     , tda.tx_guid
+     , tdc.split_guid cat_split_guid
+from tx_split_detail tda
+join tx_split_detail tdc on tda.tx_guid = tdc.tx_guid
+where tda.account_name in (select distinct account from minttrx)
+and tdc.split_guid != tda.split_guid
+and tdc.amount != 0
+-- order by tda.post_date desc, mm.id desc
 ;
 
 select * from mint_re_export
-order by to_days(post_date) desc, mint_id;
+order by post_date desc, tx_guid, cat_split_guid;
 
-select mx.category, mx.categoryId
-from minttrx mx
-left join accounts a on a.code = mx.categoryId
-where a.code is null;
+/* Which mint transactions do we not have yet? */
+select mx.* from minttrx mx
+left join mint_re_export td on mx.amount = td.amount
+ and mx.account = td.account_name
+ and mx.category = case
+       when td.category in ('Discover', 'Costco TrueEarnings Card')
+            then 'Credit Card Payment'
+       else td.category end
+where td.amount is null
+and children is null
+and mx.category not in ('Exclude From Mint')
+and mx.date > date '2010-06-30'
+-- I still need to import these.
+and not (mx.account = 'Costco TrueEarnings Card' and mx.date < date '2011-02-06')
+order by mx.account, mx.date;
 
 select date, description, original_description
      , amount, transaction_type, category, account_name
--- TODO: labels, notes
+     , labels, notes
 from mint_re_export
-order by to_days(post_date) desc, id desc
+order by post_date desc, tx_guid, cat_split_guid
 limit 100000
 into outfile '/home/connolly/qtrx/dm93finance/mint_re_export.csv'
 fields terminated by ',' enclosed by '"'
