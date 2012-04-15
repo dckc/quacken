@@ -4,3 +4,7 @@ syntax: glob
 *~
 
 qfm/media/
+bin/*
+lib/python2.7/*
+include/python2.7
+local
