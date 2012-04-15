@@ -10,3 +10,4 @@ include/python2.7
 local
 build/*
 finjax/finjax.egg-info/*
+finjax/finjax.db
