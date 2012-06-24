@@ -14,13 +14,15 @@ def main(argv):
 
     logging.basicConfig(level=logging.INFO)
 
-    config_fn, section = argv[1:3]
+    config_fn = argv[1]
     config = ConfigParser.SafeConfigParser()
     config.read(config_fn)
 
     browser = webdriver.Chrome()
-    site = AcctSite(browser, datetime.date)
-    site.txget(config, section)
+    for section in argv[2:]:
+        site = AcctSite(browser, datetime.date)
+        ofx = site.txget(config, section)
+        log.info('OFX from %s: %s', section, ofx)
 
 
 class AcctSite(object):
@@ -56,12 +58,17 @@ class AcctSite(object):
         log.info('Waiting for user to log in...')
         wt.until(login_text_found)
 
-    def follow_link(self, text):
-        e = self.__ua.find_element_by_link_text(text)
+    def follow_link(self, which):
+        if which.startswith('"'):
+            e = self.__ua.find_element_by_xpath(
+                '//a[%s]' % which[1:-1])
+        else:
+            e = self.__ua.find_element_by_link_text(which)
         e.click()
 
     def form_fill(self, conf, section, submit):
-        f = self.__ua.find_element_by_id(conf.get(section, 'form_id'))
+        f = self.__ua.find_element_by_xpath(
+            conf.get(section, 'form')[1:-1])
 
         for n, v in conf.items(section):
             if n.startswith('select_'):
@@ -79,7 +86,10 @@ class AcctSite(object):
             elif n == 'submit':
                 submit = v
 
-        f.find_element_by_name(submit).click()
+        btn = (f.find_element_by_xpath(submit[1:-1])
+               if submit.startswith('"')
+               else f.find_element_by_name(submit))
+        btn.click()
 
 
 def select_option(f, name, idx):
@@ -88,9 +98,12 @@ def select_option(f, name, idx):
 
 
 def set_radio(f, name, value):
+    val_constraint = (("and @id='%s'" % value[3:])
+                      if value.startswith('id=') else
+                      ("and @value='%s'" % value))
     radio = f.find_element_by_xpath(
-        ".//input[@type='radio' and @name='%s' and @value='%s']" % (
-            name, value))
+        ".//input[@type='radio' and @name='%s' %s]" % (
+            name, val_constraint))
     radio.click()
 
 
