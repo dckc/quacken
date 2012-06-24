@@ -3,7 +3,7 @@ import ConfigParser
 import logging
 
 from selenium import webdriver
-
+from selenium.webdriver.support import wait
 
 log = logging.getLogger(__name__)
 
@@ -25,11 +25,19 @@ class AcctSite(object):
         self.__ua = ua
 
     def txget(self, conf, section):
-        home = conf.get(section, 'home')
+        self.login(conf.get(section, 'home'),
+                   conf.get(section, 'logged_in'))
+
+    def login(self, home, logged_in):
         log.info('opening home: %s', home)
-        ua = self.__ua
-        ua.get(home)
+        self.__ua.get(home)
         log.debug('opened')
+        wt = wait.WebDriverWait(self.__ua, 60, 3)
+
+        def login_text_found(ua):
+            return ua.find_element_by_xpath("//div[contains(normalize-space(.), '%s')]" % logged_in)
+
+        wt.until(login_text_found)
 
 
 if __name__ == '__main__':
