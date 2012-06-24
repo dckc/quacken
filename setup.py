@@ -16,7 +16,10 @@ Getting Started
 http://pypi.python.org/pypi/keyring/0.9.2
 
 tested with:
-Downloading http://pypi.python.org/packages/source/k/keyring/keyring-0.9.2.zip#md5=9233b34dd53715394ddd4e3f8f4421f2
+
+http://code.google.com/p/chromedriver/downloads/list
+chromedriver_linux64_21.0.1180.4.zip   6.7 MB
+SHA1 Checksum:	 4f8f043f3893ca0969176c8cf4868117b47e3781
 
 '''
 import os
@@ -28,7 +31,7 @@ README = __doc__ # TODO: open(os.path.join(here, 'README.rst')).read()
 CHANGES = ''  # TODO: open(os.path.join(here, 'CHANGES.txt')).read()
 
 requires = [
-    'keyring',
+    'selenium',
     ]
 
 setup(name='txget',
