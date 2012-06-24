@@ -1,0 +1,8 @@
+syntax: glob
+bin/
+include/
+lib/
+local/
+txget.egg-info/
+build/
+dist/
