@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 def main(argv):
     import datetime
 
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
 
     config_fn, section = argv[1:3]
     config = ConfigParser.SafeConfigParser()
@@ -31,9 +31,17 @@ class AcctSite(object):
     def txget(self, conf, section):
         self.login(conf.get(section, 'home'),
                    conf.get(section, 'logged_in'))
-        s2 = conf.get(section, 'next')
-        self.follow_link(conf.get(s2, 'link'))
-        self.form_fill(conf, s2)
+
+        while conf.has_option(section, 'next'):
+            section = conf.get(section, 'next')
+            if conf.has_option(section, 'link'):
+                self.follow_link(conf.get(section, 'link'))
+            if conf.has_option(section, 'submit'):
+                self.form_fill(conf, section, conf.get(section, 'submit'))
+            if conf.has_option(section, 'ofx'):
+                return conf.get(section, 'ofx')
+
+        raise ValueError('no ofx option in any section')
 
     def login(self, home, logged_in):
         log.info('opening home: %s', home)
@@ -52,10 +60,8 @@ class AcctSite(object):
         e = self.__ua.find_element_by_link_text(text)
         e.click()
 
-    def form_fill(self, conf, section):
+    def form_fill(self, conf, section, submit):
         f = self.__ua.find_element_by_id(conf.get(section, 'form_id'))
-
-        submit = None
 
         for n, v in conf.items(section):
             if n.startswith('select_'):
@@ -73,8 +79,7 @@ class AcctSite(object):
             elif n == 'submit':
                 submit = v
 
-        if submit:
-            f.find_element_by_name(submit).click()
+        f.find_element_by_name(submit).click()
 
 
 def select_option(f, name, idx):
