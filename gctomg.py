@@ -77,9 +77,10 @@ def accounts(e):
 
     accounts = e.execute('''
         select distinct cur.mnemonic, a.name, a.account_type
-             , p.name, p.account_type
+             , p.name, p.account_type, ofx.string_val
         from accounts a
         join accounts p on a.parent_guid = p.guid
+        left join slots ofx on ofx.name='online_id' and ofx.obj_guid = a.guid
         join splits s on s.account_guid = a.guid
         join transactions tx on s.tx_guid = tx.guid
         join commodities cur on cur.guid = tx.currency_guid'''
@@ -91,11 +92,14 @@ def accounts(e):
             log.warn('account type mismatch: %s[%s] in %s[%s]',
                      a[1], t, a[3], pt)
 
+    def ofxref(d, a):
+        return dict(d, reference='||'.join(a[5].split())) if a[5] else d
+
     return [ElementTree.Element('account',
-                                {'currency': a[0],
-                                 'name': a[1],
-                                 'group': a[3],
-                                 'type': TY[a[2]]})
+                                ofxref({'currency': a[0],
+                                        'name': a[1],
+                                        'group': a[3],
+                                        'type': TY[a[2]]}, a))
             for a in accounts if TY[a[2]]]
 
 
