@@ -3,6 +3,7 @@
 
 import logging
 from xml.etree import cElementTree as ElementTree
+from itertools import groupby
 
 import sqlalchemy
 
@@ -22,6 +23,7 @@ def convert(e):
     # properties?
     f.extend(groups(e))
     f.extend(accounts(e))
+    f.extend(transactions(e))
     return f
 
 
@@ -73,6 +75,21 @@ def accounts(e):
                          ).fetchall()
 
     if multi_currency_accounts:
+        log.critical('multi-currency accounts! %s', multi_currency_accounts)
+
+    for a in e.execute('''
+        select count(*), name
+        from (
+         select distinct a.guid, a.name
+         from accounts a
+         join splits s on s.account_guid = a.guid
+        ) t
+        group by name
+          having count(*) > 1'''
+                         ).fetchall():
+        log.critical('%s accounts named: %s', a[0], a[1])
+
+    if multi_currency_accounts:
         raise LookupError(multi_currency_accounts)
 
     accounts = e.execute('''
@@ -92,16 +109,49 @@ def accounts(e):
             log.warn('account type mismatch: %s[%s] in %s[%s]',
                      a[1], t, a[3], pt)
 
-    def ofxref(d, a):
-        return dict(d, reference='||'.join(a[5].split())) if a[5] else d
-
     return [ElementTree.Element('account',
                                 ofxref({'currency': a[0],
                                         'name': a[1],
                                         'group': a[3],
-                                        'type': TY[a[2]]}, a))
+                                        'type': TY[a[2]]}, a[5]))
             for a in accounts if TY[a[2]]]
 
+def ofxref(d, ref):
+    return dict(d, reference='||'.join(ref.split())) if ref else d
+
+
+def transactions(e):
+    txs = e.execute('''
+      select tx.guid, tx.post_date, tx.description
+           , a.name, cur.mnemonic
+           , s.value_num / s.value_denom, s.memo
+           , ofx.string_val
+      from transactions tx
+      join commodities cur on tx.currency_guid = cur.guid
+      join splits s on s.tx_guid = tx.guid
+      join accounts a on s.account_guid = a.guid
+      left join slots ofx on ofx.name='online_id' and ofx.obj_guid = s.guid
+                    ''').fetchall()
+    return [transaction(guid, splits)
+            for guid, splits in groupby(txs, lambda row: row[0])]
+
+
+def transaction(guid, splits):
+    splits = list(splits)
+    children = [ElementTree.Element('split',
+                                    ofxref(dict(account=account,
+                                                amount='%s %s' % (
+                        cur, amount),
+                                                notes=memo), ref))
+                for _0, _1, _2, account, cur, amount, memo, ref in splits]
+
+    _, date, description = splits[0][:3]
+
+    tx = ElementTree.Element('transaction',
+                             date=date.strftime('%04Y-%02m-%02d'),
+                             description=description)
+    tx.extend(children)
+    return tx
 
 if __name__ == '__main__':
     def _hide_sys():
