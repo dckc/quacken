@@ -51,7 +51,7 @@ def groups(e):
                            join accounts ch
                            on ch.parent_guid = p.guid''').fetchall()
 
-    # hmm... no subgroups
+    log.warn('moneyguru account groups do not nest.')
     return [ElementTree.Element('group',
                                 {'name': acct[0],
                                  'type': TY[acct[1]], # TODO: just 4 types
@@ -89,9 +89,6 @@ def accounts(e):
                          ).fetchall():
         log.critical('%s accounts named: %s', a[0], a[1])
 
-    if multi_currency_accounts:
-        raise LookupError(multi_currency_accounts)
-
     accounts = e.execute('''
         select distinct cur.mnemonic, a.name, a.account_type
              , p.name, p.account_type, ofx.string_val
@@ -102,8 +99,12 @@ def accounts(e):
         join transactions tx on s.tx_guid = tx.guid
         join commodities cur on cur.guid = tx.currency_guid'''
                          ).fetchall()
+
     for a in accounts:
         t = TY[a[2]]
+        if a[2] in ('EQUITY', ):
+            log.warn('account: %s type %s converted to moneyguru %s',
+                     a[1], a[2], t)
         pt = TY[a[4]]
         if pt and t != pt:
             log.warn('account type mismatch: %s[%s] in %s[%s]',
