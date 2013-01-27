@@ -1,3 +1,30 @@
+SET sql_safe_updates=0;
+delete from budget_import;
+
+load data infile '/home/connolly/qtrx/dm93finance/monthly-budget - 2003 H1.csv'
+into table budget_import
+COLUMNS TERMINATED BY ','
+OPTIONALLY ENCLOSED BY '"'
+ESCAPED BY '"'
+LINES TERMINATED BY '\n'
+IGNORE 1 LINES;
+
+
+select * -- distinct bi.t_lo, bi.code, bi.name
+from (
+ select bi.*, STR_TO_DATE(bi.t_lo,'%m/%d/%Y') d_lo
+ from budget_import bi ) bi
+left join budgets b
+on b.name=bi.budget_name
+left join accounts a
+on a.code=bi.code
+where bi.code > ''
+-- and b.guid is null
+order by bi.budget_name, bi.code, t_lo
+;
+select * from budget_amounts;
+
+/* *************** */
 drop table if exists acct_ancestors;
 
 create table acct_ancestors as
