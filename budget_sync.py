@@ -139,7 +139,7 @@ def budget_sync_items(conn):
     # TODO: update, rather than delete all and re-insert
 
     log.info('deleting budget_amounts...')
-    conn.execute('''
+    result = conn.execute('''
 delete
 -- select *
 from budget_amounts
@@ -150,6 +150,7 @@ where budget_guid in (
     select distinct budget_name from gdocs_budget)
 )
 ''')
+    log.info('deleted %d rows', result.rowcount)
 
     log.info('inserting budget_amounts ...')
     conn.execute('''
@@ -162,7 +163,7 @@ select -- distinct bi.t_lo, bi.code, bi.name
        budget * 100 * (
          case a.account_type
            when 'INCOME' then 1
-           when 'EXPENSE' then -1
+           when 'EXPENSE' then 1
            when 'LIABILITY' then -1
            else 1/0
          end
@@ -184,6 +185,7 @@ on a.code=bi.code
 -- and b.guid is null
 -- order by bi.budget_name, bi.code, t_lo
 ''')
+    log.info('inserted %d rows', result.rowcount)
 
 
 if __name__ == '__main__':
