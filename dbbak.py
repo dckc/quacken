@@ -13,6 +13,8 @@ import ConfigParser
 from contextlib import contextmanager
 import logging
 
+from gckey import findMaker
+
 log = logging.getLogger(__name__)
 
 
@@ -32,11 +34,24 @@ def main(argv,
 
     __ http://blogs.codecommunity.org/mindbending/bending-gnome-keyring-with-python-part-2/
 
+
+    >>> commands = []
+    >>> main([__name__, MockGK.my_object, 'out_dir'],
+    ...      lambda n: (),
+    ...      MockGK().find_network_password_sync,
+    ...      StringIO.StringIO,
+    ...      MockNTF,
+    ...      lambda args, stdout=None: commands.append(args))
+    >>> commands
+    ... #doctest: +NORMALIZE_WHITESPACE
+    [('mysqldump', '--defaults-file=tmp_config', '--tab=out_dir',
+      '--skip-dump-date', '--skip-comments', 'object0')]
     '''
     logging.basicConfig(level=level)
     set_application_name(__name__)
 
-    client_config = configMaker(NamedTemporaryFile, find_network_password_sync)
+    findcreds = findMaker(find_network_password_sync)
+    client_config = configMaker(NamedTemporaryFile, findcreds)
 
     if '--splits' in argv:
         db, destpath = argv[2:4]
@@ -51,8 +66,7 @@ def main(argv,
 
 class MySQLRunner(object):
     def __init__(self, db,
-                 check_call, client_config,
-                 server='localhost', protocol='mysql'):
+                 check_call, client_config):
         self.db = db
         self._run = check_call
 
@@ -89,8 +103,7 @@ def write_config(fp, items, section='client'):
     cp.write(fp)
 
 
-def configMaker(NamedTemporaryFile, find_network_password_sync,
-                server='localhost', protocol='mysql'):
+def configMaker(NamedTemporaryFile, findcreds):
     '''Maker to get db credentials and store in temporary mysql config file.
 
     @param NamedTemporaryFile: a la python tempfile module
@@ -101,7 +114,8 @@ def configMaker(NamedTemporaryFile, find_network_password_sync,
 
     Actually, the config file will get re-opened by name, but...
 
-    >>> cc = configMaker(MockNTF, MockGK().find_network_password_sync)
+    >>> cc = configMaker(MockNTF,
+    ...                  findMaker(MockGK().find_network_password_sync))
     >>> with cc(MockGK.my_object) as conf:
     ...     print conf.name
     ...     print conf.readline().strip()
@@ -110,14 +124,6 @@ def configMaker(NamedTemporaryFile, find_network_password_sync,
     [client]
     password = sekret
     '''
-    def findcreds(db):
-        log.info('looking for keys: %s',
-                 dict(protocol=protocol, server=server, object=db))
-        ans = find_network_password_sync(protocol=protocol, server=server,
-                                         object=db)
-        log.debug('creds: %s', ans[0].keys())
-        return dict([(k, ans[0][k]) for k in ('user', 'password')])
-
     @contextmanager
     def client_config(db):
         conf = NamedTemporaryFile(suffix='.ini')
@@ -133,30 +139,6 @@ class MockNTF(StringIO.StringIO):
     def __init__(self, **kw):
         StringIO.StringIO.__init__(self)
         self.name = 'tmp_config'
-
-
-class MockGK(object):
-    my_object = 'object0'
-    my_protocol = 'mysql'
-    my_server = 'localhost'
-
-    my_user = 'user0'
-    my_password = 'sekret'
-
-    def find_network_password_sync(self,
-                                   user=None,
-                                   domain=None,
-                                   server=None,
-                                   object=None,
-                                   protocol=None,
-                                   authtype=None,
-                                   port=0):
-        if (object == self.my_object
-            and protocol == self.my_protocol
-            and server == self.my_server):
-            return [dict(user=self.my_user, password=self.my_password)]
-
-        raise IOError  # well, really some other error, but...
 
 
 class FinDB(MySQLRunner):
