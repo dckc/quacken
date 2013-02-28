@@ -5,24 +5,32 @@ import csv
 import logging
 
 from sqlalchemy import MetaData, Table, Column
-from sqlalchemy.types import String, DECIMAL
+from sqlalchemy.types import String
 from sqlalchemy.engine.url import URL
 
 from gckey import findMaker
 
 log = logging.getLogger(__name__)
 
-Money = DECIMAL(precision=8, scale=2)
 Name = String(80)
 
 
-def main(argv, open_read, find_network_password_sync, create_engine,
-         host='localhost'):
+def main(argv, open_read, find_network_password_sync, create_engine):
     logging.basicConfig(level=logging.DEBUG)
 
     gdoc_csv, db = argv[1:3]
 
-    creds = findMaker(find_network_password_sync)(db)
+    engine = db_prepare(findMaker(find_network_password_sync),
+                        create_engine, db)
+
+    budget_load(open_read(gdoc_csv), engine)
+
+    raise NotImplementedError
+
+
+def db_prepare(findcreds, create_engine, db,
+               host='localhost'):
+    creds = findcreds(db)
 
     engine = create_engine(URL(drivername='mysql', host=host, database=db,
                                username=creds['user'],
@@ -33,9 +41,7 @@ def main(argv, open_read, find_network_password_sync, create_engine,
     GnuCashAux.drop_all(engine)
     GnuCashAux.create_all(engine)
 
-    budget_load(open_read(gdoc_csv), engine)
-
-    raise NotImplementedError
+    return engine
 
 
 def budget_load(infp, conn):
@@ -54,37 +60,6 @@ BudgetItem = Table('gdocs_budget', GnuCashAux,
                    Column('name', Name),
                    Column('budget', String(20)),  # amount
                    Column('notes', String(200)))
-
-
-def money(txt):
-    '''
-    >>> money('$8,454.00')
-    (8454, 1)
-    >>> money('60')
-    (60, 1)
-    >>> money('256.69')
-    (25669, 100)
-    '''
-    try:
-        amt = int(float(txt.replace('$', '').replace(',', '')) * 100)
-    except ValueError:
-        return 0, 1
-
-    if amt % 100 == 0:
-        return amt / 100, 1
-    else:
-        return amt, 100
-
-
-def add_money((xn, xd), (yn, yd)):
-    if xd == yd:
-        return xn + yn, xd
-    else:
-        n = xn * (100 / xd) + yn * (100 / yd)
-        if n % 100 == 0:
-            return n / 100, 1
-        else:
-            return n, 100
 
 
 if __name__ == '__main__':
