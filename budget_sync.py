@@ -4,13 +4,11 @@
 import csv
 import logging
 
-import sqlalchemy
-from sqlalchemy import Column
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.types import Integer, String, DECIMAL
+from sqlalchemy import MetaData, Table, Column
+from sqlalchemy.types import String, DECIMAL
+from sqlalchemy.engine.url import URL
 
-Base = declarative_base()
-Session = sqlalchemy.orm.sessionmaker()
+from gckey import findMaker
 
 log = logging.getLogger(__name__)
 
@@ -18,68 +16,44 @@ Money = DECIMAL(precision=8, scale=2)
 Name = String(80)
 
 
-def main(argv):
+def main(argv, open_read, find_network_password_sync, create_engine,
+         host='localhost'):
     logging.basicConfig(level=logging.DEBUG)
-    infn, engine_url = argv[1:3]
 
-    engine = budget_setup(engine_url)
-    def add_row(r):
-        engine.execute(BudgetItem.__table__.insert(), r)
-    budget_load(open(infn), add_row)
+    gdoc_csv, db = argv[1:3]
 
+    creds = findMaker(find_network_password_sync)(db)
 
-def budget_load(infp, insert_fn,
-                budget_name='2012 H1',
-                budget_start=(2012, 1), periods=6,
-                monthly_header='Monthly 2012',
-                period0_header='Jan 2012'):
-    sheet = csv.reader(infp)
-    schema = sheet.next()
-    monthly_col = schema.index(monthly_header)
-    period0_col = schema.index(period0_header)
-    id_col = schema.index('id')
+    engine = create_engine(URL(drivername='mysql', host=host, database=db,
+                               username=creds['user'],
+                               password=creds['password']))
 
-    for row in sheet:
-        log.debug('input row: %s', row)
-        if len(row) < monthly_col + 1:
-            continue
-        acct_id = row[id_col]
-        if not acct_id:
-            continue
-        subcat = row[id_col - 1]
-        cat = row[id_col - 2]
+    log.info('dropping and creating %s',
+             [t.name for t in GnuCashAux.sorted_tables])
+    GnuCashAux.drop_all(engine)
+    GnuCashAux.create_all(engine)
 
-        monthly_money = money(row[monthly_col])
-        for p in range(0, periods):
-            amt = add_money(monthly_money, (money(row[period0_col + p])
-                                            if period0_col + p < len(row)
-                                            else (0, 1)))
+    budget_load(open_read(gdoc_csv), engine)
 
-            if amt[0] > 0:
-                insert_fn(dict(id=None,
-                               budget=budget_name,
-                               cat=cat, subcat=subcat, acct_id=acct_id,
-                               period=p,
-                               amount_num=amt[0], amount_denom=amt[1]))
+    raise NotImplementedError
 
 
-def budget_setup(engine_url):
-    engine = sqlalchemy.create_engine(engine_url)
-    Base.metadata.drop_all(engine)
-    Base.metadata.create_all(engine)
-    return engine
+def budget_load(infp, conn):
+    sheet = csv.DictReader(infp)
+    rows = list(sheet)
+    log.info('inserting %d rows into %s', len(rows), BudgetItem)
+    conn.execute(BudgetItem.insert(), rows)
 
 
-class BudgetItem(Base):
-    __tablename__ = 'gdocs_budget'
-    id = Column(Integer, primary_key=True)
-    budget = Column(Name)
-    cat = Column(Name)
-    subcat = Column(Name)
-    acct_id = Column(Integer)
-    period = Column(Integer)
-    amount_num = Column(Integer)
-    amount_denom = Column(Integer)
+GnuCashAux = MetaData()
+BudgetItem = Table('gdocs_budget', GnuCashAux,
+                   Column('budget_name', Name),
+                   Column('t_lo', String(40)),  # date
+                   Column('account_type', Name),
+                   Column('code', Name),
+                   Column('name', Name),
+                   Column('budget', String(20)),  # amount
+                   Column('notes', String(200)))
 
 
 def money(txt):
@@ -101,6 +75,7 @@ def money(txt):
     else:
         return amt, 100
 
+
 def add_money((xn, xd), (yn, yd)):
     if xd == yd:
         return xn + yn, xd
@@ -113,5 +88,17 @@ def add_money((xn, xd), (yn, yd)):
 
 
 if __name__ == '__main__':
-    import sys
-    main(sys.argv)
+    def _initial_caps():
+        from sys import argv
+        import gnomekeyring as gk
+        from sqlalchemy import create_engine
+
+        def open_read(n):
+            return open(n)
+
+        return dict(argv=argv,
+                    find_network_password_sync=gk.find_network_password_sync,
+                    create_engine=create_engine,
+                    open_read=open_read)
+
+    main(**_initial_caps())
