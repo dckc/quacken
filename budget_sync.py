@@ -4,8 +4,9 @@
 import csv
 import logging
 
-from sqlalchemy import MetaData, Table, Column, select, func
-from sqlalchemy.types import String
+from sqlalchemy import (MetaData, Table, Column,
+                        select, func, text)
+from sqlalchemy.types import String, Date, Integer
 from sqlalchemy.engine.url import URL
 
 from gckey import findMaker
@@ -18,6 +19,7 @@ Name = String(80)
 def main(argv, open_read, find_network_password_sync, create_engine,
          level=logging.DEBUG, host='localhost'):
     logging.basicConfig(level=level)
+    logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 
     gdoc_csv, db = argv[1:3]
 
@@ -39,13 +41,22 @@ def main(argv, open_read, find_network_password_sync, create_engine,
 GnuCashAux = MetaData()
 BudgetItem = Table('gdocs_budget', GnuCashAux,
                    Column('budget_name', Name),
-                   Column('t_lo', String(40)),  # date
+                   Column('t_lo', String(40)),
+                   Column('lo', Date),  # date
                    Column('account_type', Name),
                    Column('code', Name),
                    Column('parent', Name),
                    Column('name', Name),
-                   Column('budget', String(20)),  # amount
+                   Column('budget', String(20)),
+                   Column('amount_num', Integer),
                    Column('notes', String(200)))
+
+BudgetTypeUpdate = text('''
+ update gdocs_budget
+ set lo = STR_TO_DATE(t_lo,'%m/%d/%Y'),
+     amount_num = 100 * replace(replace(budget, '$', ''), ',', '')
+ where code > '' and t_lo > ''
+''')
 
 
 class Budget(object):
@@ -65,18 +76,20 @@ class Budget(object):
         rows = list(sheet)
         log.info('inserting %d rows into %s', len(rows), BudgetItem)
         conn.execute(BudgetItem.insert(), rows)
+        conn.execute(BudgetTypeUpdate)
 
     def sync_accounts(self, dry_run=True):
         conn = self._engine.connect()
-        missing_acct = conn.execute('''
-select bi.parent, a.name, count(*) from
+
+        q = select_dups('''
 (select distinct parent from gdocs_budget
 where code > '' and t_lo > '') bi
 left join accounts a
        on a.name=bi.parent
-group by bi.parent, a.name
-having count(*) != 1
-''').fetchall()
+''',
+                        key_cols=('parent', 'name'),
+                        crit=func.count() != 1)
+        missing_acct = conn.execute(q).fetchall()
 
         log.debug('parent mismatch: %d', len(missing_acct))
 
@@ -118,13 +131,10 @@ where a.guid is null
 
     def check_dups(self):
         conn = self._engine.connect()
-        key_cols = [BudgetItem.c.budget_name,
-                    BudgetItem.c.t_lo,
-                    BudgetItem.c.code]
-        dups = conn.execute(
-            select(key_cols + [func.count()]).
-            where(BudgetItem.c.code > '').
-            group_by(*key_cols).having(func.count() > 1)).fetchall()
+        q = select_dups(BudgetItem.select().
+                        where(BudgetItem.c.code > '').alias('bi'),
+                        key_cols=('budget_name', 't_lo', 'code'))
+        dups = conn.execute(q).fetchall()
         log.debug('dups: %d', len(dups))
 
         if dups:
@@ -184,6 +194,19 @@ on a.code=bi.code
 -- order by bi.budget_name, bi.code, t_lo
 ''')
         log.info('inserted %d rows', result.rowcount)
+
+
+def select_dups(from_obj, key_cols,
+                crit=func.count() > 1):
+    '''
+    >>> print select_dups(from_obj='t', key_cols=('a', 'b', 'c'))
+    ... # doctest: +NORMALIZE_WHITESPACE
+    SELECT a, b, c, count(*) AS count_1
+    FROM t GROUP BY a, b, c
+    HAVING count(*) > :count_2
+    '''
+    return select(key_cols + (func.count(), ), from_obj=from_obj).\
+        group_by(*key_cols).having(crit)
 
 
 def format_rows(rows):
