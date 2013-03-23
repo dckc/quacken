@@ -40,22 +40,83 @@ def main(argv, open_read, find_network_password_sync, create_engine,
 
 GnuCashAux = MetaData()
 BudgetItem = Table('gdocs_budget', GnuCashAux,
+                   Column('id', Integer),
+                   Column('guid', String(32)),
                    Column('budget_name', Name),
+                   Column('budget_guid', String(32)),
                    Column('t_lo', String(40)),
                    Column('lo', Date),  # date
+                   Column('period_num', Integer),
                    Column('account_type', Name),
                    Column('code', Name),
                    Column('parent', Name),
                    Column('name', Name),
+                   Column('account_guid', String(32)),
                    Column('budget', String(20)),
                    Column('amount_num', Integer),
+                   Column('amount_sign', Integer),
+                   Column('slot_9', Integer),
+                   Column('slot_3', Integer),
                    Column('notes', String(200)))
+
+BudgetMatchUpdate = text('''
+ update gdocs_budget
+ set budget_guid = (
+   select guid from budgets b
+   where b.name = budget_name
+ )
+''')
+
+AccountMatchUpdate = text('''
+ update gdocs_budget bi
+ join accounts a on a.code = bi.code
+ set account_guid = a.guid,
+     amount_sign =
+         case a.account_type
+           when 'INCOME' then 1
+           when 'EXPENSE' then 1
+           when 'LIABILITY' then -1
+           else 1/0
+         end
+ where bi.code > ''
+''')
+
+ItemMatchUpdate = text('''
+ update gdocs_budget bi
+ join budgets b on b.guid = bi.budget_guid
+ join accounts a on a.guid = bi.account_guid
+ join budget_amounts ba on ba.budget_guid = b.guid
+              and ba.account_guid = a.guid
+              and ba.period_num = bi.period_num
+ set bi.id = ba.id
+''')
+
+SlotMatchUpdate = text('''
+ update gdocs_budget bi
+ join budgets b on b.guid = bi.budget_guid
+ join accounts a on a.guid = bi.account_guid
+ join slots s9 on s9.obj_guid = b.guid
+              and s9.name = a.guid
+              -- and s9.slot_type = 9
+ join slots s3 on s3.obj_guid = s9.guid_val
+              -- and s3.slot_type = 3
+              and s3.name = concat(a.name, '/', bi.period_num)
+ set bi.slot_9 = s9.id,
+     bi.slot_3 = s3.id,
+     bi.guid = s9.guid_val
+''')
 
 BudgetTypeUpdate = text('''
  update gdocs_budget
- set lo = STR_TO_DATE(t_lo,'%m/%d/%Y'),
+ set guid = replace(uuid(), '-', ''),
+     lo = STR_TO_DATE(t_lo,'%m/%d/%Y'),
      amount_num = 100 * replace(replace(budget, '$', ''), ',', '')
  where code > '' and t_lo > ''
+''')
+
+BudgetPeriodUpdate = text('''
+ update gdocs_budget
+ set period_num = mod(month(lo) - 1, 3)
 ''')
 
 
@@ -76,25 +137,28 @@ class Budget(object):
         rows = list(sheet)
         log.info('inserting %d rows into %s', len(rows), BudgetItem)
         conn.execute(BudgetItem.insert(), rows)
+        conn.execute(BudgetMatchUpdate)
         conn.execute(BudgetTypeUpdate)
+        conn.execute(BudgetPeriodUpdate)
 
     def sync_accounts(self, dry_run=True):
         conn = self._engine.connect()
 
-        q = select_dups('''
+        q = '''
+select parent, name, count(name) from
 (select distinct parent from gdocs_budget
 where code > '' and t_lo > '') bi
 left join accounts a
        on a.name=bi.parent
-''',
-                        key_cols=('parent', 'name'),
-                        crit=func.count() != 1)
+group by parent, name
+having count(name) != 1
+'''
         missing_acct = conn.execute(q).fetchall()
 
-        log.debug('parent mismatch: %d', len(missing_acct))
+        log.debug('Ambiguous parents: %d', len(missing_acct))
 
         if missing_acct:
-            log.error('parent mismatch:\n%s',
+            log.error('Ambiguous parents:\n%s',
                       format_rows(missing_acct))
             raise IOError
 
@@ -127,7 +191,11 @@ where a.guid is null
             if dry_run:
                 raise IOError
 
-        conn.execute('insert into accounts ' + missing_acct_q)
+        log.info('inserting accounts...')
+        result = conn.execute('insert into accounts ' + missing_acct_q)
+        log.info('inserted %d rows', result.rowcount)
+
+        conn.execute(AccountMatchUpdate)
 
     def check_dups(self):
         conn = self._engine.connect()
@@ -146,16 +214,30 @@ where a.guid is null
         # TODO: update, rather than delete all and re-insert
         conn = self._engine.connect()
 
+        log.info('matching slots...')
+        result = conn.execute(SlotMatchUpdate)
+        log.info('updated %d rows', result.rowcount)
+
+        log.info('matching budget items...')
+        result = conn.execute(ItemMatchUpdate)
+        log.info('updated %d rows', result.rowcount)
+
+        unmatched = conn.execute('''
+select * from gdocs_budget
+where code > '' and (budget_guid is null
+   or account_guid is null
+   or id is null
+   or slot_9 is null
+   or slot_3 is null)
+''').fetchall()
+        if unmatched:
+            log.info('unmatched: %s', format_rows(unmatched))
+
         log.info('deleting budget_amounts...')
         result = conn.execute('''
-delete
--- select *
-from budget_amounts
-where budget_guid in (
-  select b.guid
-  from budgets b
-  where b.name in (
-    select distinct budget_name from gdocs_budget)
+delete from budget_amounts where budget_guid in (
+  select distinct budget_guid
+  from gdocs_budget where account_guid is not null
 )
 ''')
         log.info('deleted %d rows', result.rowcount)
@@ -164,34 +246,46 @@ where budget_guid in (
         conn.execute('''
 insert into budget_amounts
 select -- distinct bi.t_lo, bi.code, bi.name
-       null id,
-         b.guid budget_guid,
-       a.guid account_guid,
-       mod(month(t_lo) - 1, 3) period_num,
-       budget * 100 * (
-         case a.account_type
-           when 'INCOME' then 1
-           when 'EXPENSE' then 1
-           when 'LIABILITY' then -1
-           else 1/0
-         end
-       ) amount_num,
+       id,
+       budget_guid,
+       account_guid,
+       period_num,
+       amount_num * amount_sign amount_num,
        100 amount_denom
-from (
- select budget_name,
-        STR_TO_DATE(bi.t_lo,'%%m/%%d/%%Y') t_lo,
-        account_type, bi.code, parent, bi.name,
-        1 * replace(replace(budget, '$', ''), ',', '') budget
- from gdocs_budget bi
- where bi.code > ''
- ) bi
-join budgets b
-on b.name=bi.budget_name
-join accounts a
-on a.code=bi.code
+from gdocs_budget bi
+join accounts a on a.guid=bi.account_guid
+''')
+        log.info('inserted %d rows', result.rowcount)
 
--- and b.guid is null
--- order by bi.budget_name, bi.code, t_lo
+        log.info('deleting budget slots...')
+        result = conn.execute('''
+delete from slots where id in (
+  select slot_9 from gdocs_budget bi
+  where bi.account_guid is not null
+union all
+  select slot_3 from gdocs_budget bi
+  where bi.account_guid is not null
+)
+''')
+        log.info('deleted %d rows', result.rowcount)
+
+        log.info('inserting budget slots type 9...')
+        result = conn.execute('''
+insert into slots (id, obj_guid, name, slot_type, guid_val)
+select slot_9, budget_guid, account_guid, 9, guid
+from gdocs_budget bi
+where bi.account_guid is not null
+''')
+        log.info('inserted %d rows', result.rowcount)
+
+        log.info('inserting budget slots type 3...')
+        result = conn.execute('''
+insert into slots (id, obj_guid, name,
+                   slot_type, numeric_val_num, numeric_val_denom)
+select slot_3, guid, concat(account_guid, '/', period_num),
+       3, amount_num * amount_sign, 100
+from gdocs_budget bi
+where bi.account_guid is not null
 ''')
         log.info('inserted %d rows', result.rowcount)
 
