@@ -70,6 +70,12 @@ BudgetMatchUpdate = text('''
 AccountMatchUpdate = text('''
  update gdocs_budget bi
  join accounts a on a.code = bi.code
+ join (
+   select replace(uuid(), '-', '') guid, budget_name, code
+   from (
+     select distinct budget_name, code from gdocs_budget
+   ) each_acct_budget
+ ) ea on ea.code = bi.code and ea.budget_name = bi.budget_name
  set account_guid = a.guid,
      amount_sign =
          case a.account_type
@@ -77,7 +83,8 @@ AccountMatchUpdate = text('''
            when 'EXPENSE' then 1
            when 'LIABILITY' then -1
            else 1/0
-         end
+         end,
+     bi.guid = ea.guid
  where bi.code > ''
 ''')
 
@@ -108,8 +115,7 @@ SlotMatchUpdate = text('''
 
 BudgetTypeUpdate = text('''
  update gdocs_budget
- set guid = replace(uuid(), '-', ''),
-     lo = STR_TO_DATE(t_lo,'%m/%d/%Y'),
+ set lo = STR_TO_DATE(t_lo,'%m/%d/%Y'),
      amount_num = 100 * replace(replace(budget, '$', ''), ',', '')
  where code > '' and t_lo > ''
 ''')
@@ -259,20 +265,25 @@ join accounts a on a.guid=bi.account_guid
 
         log.info('deleting budget slots...')
         result = conn.execute('''
-delete from slots where id in (
-  select slot_9 from gdocs_budget bi
-  where bi.account_guid is not null
-union all
-  select slot_3 from gdocs_budget bi
-  where bi.account_guid is not null
-)
+delete s3
+from gdocs_budget bi
+join slots s9 on bi.budget_guid = s9.obj_guid
+             and bi.account_guid = s9.name
+join slots s3 on s3.obj_guid = s9.guid_val;
+''')
+        log.info('deleted %d rows', result.rowcount)
+        result = conn.execute('''
+delete s9
+from gdocs_budget bi
+join slots s9 on bi.budget_guid = s9.obj_guid
+             and bi.account_guid = s9.name
 ''')
         log.info('deleted %d rows', result.rowcount)
 
         log.info('inserting budget slots type 9...')
         result = conn.execute('''
 insert into slots (id, obj_guid, name, slot_type, guid_val)
-select slot_9, budget_guid, account_guid, 9, guid
+select distinct slot_9, budget_guid, account_guid, 9, guid
 from gdocs_budget bi
 where bi.account_guid is not null
 ''')
@@ -286,6 +297,7 @@ select slot_3, guid, concat(account_guid, '/', period_num),
        3, amount_num * amount_sign, 100
 from gdocs_budget bi
 where bi.account_guid is not null
+order by period_num
 ''')
         log.info('inserted %d rows', result.rowcount)
 
