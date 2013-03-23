@@ -15,42 +15,25 @@ log = logging.getLogger(__name__)
 Name = String(80)
 
 
-def main(argv, open_read, find_network_password_sync, create_engine):
-    logging.basicConfig(level=logging.DEBUG)
+def main(argv, open_read, find_network_password_sync, create_engine,
+         level=logging.DEBUG, host='localhost'):
+    logging.basicConfig(level=level)
 
     gdoc_csv, db = argv[1:3]
 
-    engine = db_prepare(findMaker(find_network_password_sync),
-                        create_engine, db)
-
-    budget_load(open_read(gdoc_csv), engine)
-
-    budget_check_dups(engine)
-    budget_sync_accounts(engine, dry_run='--accounts' not in argv)
-    budget_sync_items(engine)
-
-
-def db_prepare(findcreds, create_engine, db,
-               host='localhost'):
+    findcreds = findMaker(find_network_password_sync)
+    log.info('getting keyring info for %s', db)
     creds = findcreds(db)
-
     engine = create_engine(URL(drivername='mysql', host=host, database=db,
                                username=creds['user'],
                                password=creds['password']))
 
-    log.info('dropping and creating %s',
-             [t.name for t in GnuCashAux.sorted_tables])
-    GnuCashAux.drop_all(engine)
-    GnuCashAux.create_all(engine)
+    budget = Budget(engine)
+    budget.load(open_read(gdoc_csv))
 
-    return engine
-
-
-def budget_load(infp, conn):
-    sheet = csv.DictReader(infp)
-    rows = list(sheet)
-    log.info('inserting %d rows into %s', len(rows), BudgetItem)
-    conn.execute(BudgetItem.insert(), rows)
+    budget.check_dups()
+    budget.sync_accounts(dry_run='--accounts' not in argv)
+    budget.sync_items()
 
 
 GnuCashAux = MetaData()
@@ -65,8 +48,27 @@ BudgetItem = Table('gdocs_budget', GnuCashAux,
                    Column('notes', String(200)))
 
 
-def budget_sync_accounts(conn, dry_run=True):
-    missing_acct = conn.execute('''
+class Budget(object):
+    def __init__(self, engine):
+        self._engine = engine
+
+    def _prepare(self):
+        log.info('dropping and creating %s',
+                 [t.name for t in GnuCashAux.sorted_tables])
+        GnuCashAux.drop_all(self._engine)
+        GnuCashAux.create_all(self._engine)
+
+    def load(self, infp):
+        self._prepare()
+        conn = self._engine.connect()
+        sheet = csv.DictReader(infp)
+        rows = list(sheet)
+        log.info('inserting %d rows into %s', len(rows), BudgetItem)
+        conn.execute(BudgetItem.insert(), rows)
+
+    def sync_accounts(self, dry_run=True):
+        conn = self._engine.connect()
+        missing_acct = conn.execute('''
 select bi.parent, a.name, count(*) from
 (select distinct parent from gdocs_budget
 where code > '' and t_lo > '') bi
@@ -76,14 +78,14 @@ group by bi.parent, a.name
 having count(*) != 1
 ''').fetchall()
 
-    log.debug('parent mismatch: %d', len(missing_acct))
+        log.debug('parent mismatch: %d', len(missing_acct))
 
-    if missing_acct:
-        log.error('parent mismatch:\n%s',
-                  format_rows(missing_acct))
-        raise IOError
+        if missing_acct:
+            log.error('parent mismatch:\n%s',
+                      format_rows(missing_acct))
+            raise IOError
 
-    missing_acct_q = '''
+        missing_acct_q = '''
 select replace(uuid(), '-', '') as guid
      , bi.name, bi.account_type
      , usd.guid as commodity_guid
@@ -100,46 +102,42 @@ join commodities usd on usd.mnemonic = 'USD'
 left join accounts a on a.code = bi.code
 where a.guid is null
 '''
-    missing_acct = conn.execute(missing_acct_q).fetchall()
+        missing_acct = conn.execute(missing_acct_q).fetchall()
 
-    log.debug('missing_acct: %d', len(missing_acct))
+        log.debug('missing_acct: %d', len(missing_acct))
 
-    if missing_acct:
-        log.log(logging.ERROR if dry_run else logging.WARN,
-                'no such account code:\n%s',
-                format_rows(missing_acct))
+        if missing_acct:
+            log.log(logging.ERROR if dry_run else logging.WARN,
+                    'no such account code:\n%s',
+                    format_rows(missing_acct))
 
-        if dry_run:
+            if dry_run:
+                raise IOError
+
+        conn.execute('insert into accounts ' + missing_acct_q)
+
+    def check_dups(self):
+        conn = self._engine.connect()
+        key_cols = [BudgetItem.c.budget_name,
+                    BudgetItem.c.t_lo,
+                    BudgetItem.c.code]
+        dups = conn.execute(
+            select(key_cols + [func.count()]).
+            where(BudgetItem.c.code > '').
+            group_by(*key_cols).having(func.count() > 1)).fetchall()
+        log.debug('dups: %d', len(dups))
+
+        if dups:
+            log.error('duplicate keys in budget spreadsheet: %s',
+                      format_rows(dups))
             raise IOError
 
-    conn.execute('insert into accounts ' + missing_acct_q)
+    def sync_items(self):
+        # TODO: update, rather than delete all and re-insert
+        conn = self._engine.connect()
 
-
-def format_rows(rows):
-    return '\n'.join([str(row) for row in rows])
-
-
-def budget_check_dups(conn):
-    key_cols = [BudgetItem.c.budget_name,
-                BudgetItem.c.t_lo,
-                BudgetItem.c.code]
-    dups = conn.execute(
-        select(key_cols + [func.count()]).
-        where(BudgetItem.c.code > '').
-        group_by(*key_cols).having(func.count() > 1)).fetchall()
-    log.debug('dups: %d', len(dups))
-
-    if dups:
-        log.error('duplicate keys in budget spreadsheet: %s',
-                  format_rows(dups))
-        raise IOError
-
-
-def budget_sync_items(conn):
-    # TODO: update, rather than delete all and re-insert
-
-    log.info('deleting budget_amounts...')
-    result = conn.execute('''
+        log.info('deleting budget_amounts...')
+        result = conn.execute('''
 delete
 -- select *
 from budget_amounts
@@ -150,10 +148,10 @@ where budget_guid in (
     select distinct budget_name from gdocs_budget)
 )
 ''')
-    log.info('deleted %d rows', result.rowcount)
+        log.info('deleted %d rows', result.rowcount)
 
-    log.info('inserting budget_amounts ...')
-    conn.execute('''
+        log.info('inserting budget_amounts ...')
+        conn.execute('''
 insert into budget_amounts
 select -- distinct bi.t_lo, bi.code, bi.name
        null id,
@@ -185,7 +183,11 @@ on a.code=bi.code
 -- and b.guid is null
 -- order by bi.budget_name, bi.code, t_lo
 ''')
-    log.info('inserted %d rows', result.rowcount)
+        log.info('inserted %d rows', result.rowcount)
+
+
+def format_rows(rows):
+    return '\n'.join([str(row) for row in rows])
 
 
 if __name__ == '__main__':
