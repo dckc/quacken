@@ -25,13 +25,17 @@ def main(argv, open_arg, engine_arg,
     gdoc_budget, engine = open_arg(1), engine_arg(2)
 
     budget = Budget(engine)
-    budget.load(gdoc_budget)
-
-    budget.check_dups()
-    budget.sync_accounts(dry_run='--accounts' not in argv)
-    if '--subtot' in argv:
-        budget.compare_subtots()
+    if '--by-parent' in argv:
+        log.info('subtots:\n%s', pformat(budget.compare_subtots()))
+    elif '--by-type' in argv:
+        log.info('subtots:\n%s', pformat(budget.compare_by_acct_type()))
+    elif [arg for arg in argv if arg.startswith('--')]:
+        raise SystemExit('unrecognized arguments:' + str(argv[1:]))
     else:
+        budget.load(gdoc_budget)
+
+        budget.check_dups()
+        budget.sync_accounts(dry_run='--accounts' not in argv)
         budget.sync_items()
 
 
@@ -213,6 +217,33 @@ where a.guid is null
                       format_rows(dups))
             raise IOError
 
+    acct_type_q = '''select gcb.*, gdb.subtot,
+      case when gcb.subtot = gdb.subtot then '' else 'MISMATCH' end ok
+    from
+    (select b.name budget_name, a.account_type,
+    sum(amount_num / 100.0) subtot
+    from budgets b
+    join budget_amounts ba on ba.budget_guid = b.guid
+    join accounts a on a.guid = ba.account_guid
+    where b.name in (%(budget_name)s)
+    group by b.name, a.account_type) gcb
+    join (
+      select budget_name, account_type,
+      sum(amount_num / 100.0) subtot
+      from gdocs_budget bi
+      where bi.code > ''
+      and budget_name in (%(budget_name)s)
+      group by budget_name, account_type
+    ) gdb
+      on gdb.budget_name = gcb.budget_name
+      and gdb.account_type = gcb.account_type
+    '''
+
+    def compare_by_acct_type(self, budget_name='2013 Q2'):
+        conn = self._engine.connect()
+        ans = conn.execute(self.acct_type_q, budget_name=budget_name)
+        return ans.fetchall()
+
     subtot_q = '''select gcb.*, gdb.subtot,
       case when gcb.subtot = gdb.subtot then '' else 'MISMATCH' end ok
     from
@@ -240,7 +271,7 @@ where a.guid is null
     def compare_subtots(self):
         conn = self._engine.connect()
         ans = conn.execute(self.subtot_q, budget_name='2013 Q2')
-        log.info('subtots:\n%s', pformat(ans.fetchall()))
+        return ans.fetchall()
 
     def sync_items(self):
         # TODO: update, rather than delete all and re-insert
