@@ -29,11 +29,15 @@ def main(argv, open_arg, engine_arg,
         log.info('subtots:\n%s', pformat(budget.compare_subtots()))
     elif '--by-type' in argv:
         log.info('subtots:\n%s', pformat(budget.compare_by_acct_type()))
-    elif [arg for arg in argv if arg.startswith('--')]:
+    elif '--load' in argv:
+        budget.load(gdoc_budget)
+        budget.check_dups()
+        budget.sync_accounts(dry_run='--accounts' not in argv)
+    elif [arg for arg in argv
+          if arg != '--acounts' and arg.startswith('--')]:
         raise SystemExit('unrecognized arguments:' + str(argv[1:]))
     else:
         budget.load(gdoc_budget)
-
         budget.check_dups()
         budget.sync_accounts(dry_run='--accounts' not in argv)
         budget.sync_items()
@@ -229,7 +233,7 @@ where a.guid is null
     group by b.name, a.account_type) gcb
     join (
       select budget_name, account_type,
-      sum(amount_num / 100.0) subtot
+      sum(amount_num * amount_sign / 100.0) subtot
       from gdocs_budget bi
       where bi.code > ''
       and budget_name in (%(budget_name)s)
@@ -257,7 +261,7 @@ where a.guid is null
     group by b.name, a.account_type, p.name) gcb
     left join (
       select budget_name, account_type, parent,
-      sum(amount_num / 100.0) subtot
+      sum(amount_num * amount_sign / 100.0) subtot
       from gdocs_budget bi
       where bi.code > ''
       and budget_name in (%(budget_name)s)
