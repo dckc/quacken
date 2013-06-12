@@ -221,7 +221,7 @@ where a.guid is null
       case when gcb.subtot = gdb.subtot then '' else 'MISMATCH' end ok
     from
     (select b.name budget_name, a.account_type,
-    sum(amount_num / 100.0) subtot
+    sum(ba.amount_num / ba.amount_denom) subtot
     from budgets b
     join budget_amounts ba on ba.budget_guid = b.guid
     join accounts a on a.guid = ba.account_guid
@@ -248,14 +248,14 @@ where a.guid is null
       case when gcb.subtot = gdb.subtot then '' else 'MISMATCH' end ok
     from
     (select b.name budget_name, a.account_type, p.name parent,
-    sum(amount_num / 100.0) subtot
+    sum(ba.amount_num / ba.amount_denom) subtot
     from budgets b
     join budget_amounts ba on ba.budget_guid = b.guid
     join accounts a on a.guid = ba.account_guid
     join accounts p on a.parent_guid = p.guid
     where b.name in (%(budget_name)s)
     group by b.name, a.account_type, p.name) gcb
-    join (
+    left join (
       select budget_name, account_type, parent,
       sum(amount_num / 100.0) subtot
       from gdocs_budget bi
