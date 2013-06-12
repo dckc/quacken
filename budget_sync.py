@@ -16,22 +16,15 @@ log = logging.getLogger(__name__)
 Name = String(80)
 
 
-def main(argv, open_read, find_network_password_sync, create_engine,
-         level=logging.DEBUG, host='localhost'):
+def main(argv, open_arg, engine_arg,
+         level=logging.DEBUG):
     logging.basicConfig(level=level)
     logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 
-    gdoc_csv, db = argv[1:3]
-
-    findcreds = findMaker(find_network_password_sync)
-    log.info('getting keyring info for %s', db)
-    creds = findcreds(db)
-    engine = create_engine(URL(drivername='mysql', host=host, database=db,
-                               username=creds['user'],
-                               password=creds['password']))
+    gdoc_budget, engine = open_arg(1), engine_arg(2)
 
     budget = Budget(engine)
-    budget.load(open_read(gdoc_csv))
+    budget.load(gdoc_budget)
 
     budget.check_dups()
     budget.sync_accounts(dry_run='--accounts' not in argv)
@@ -320,17 +313,26 @@ def format_rows(rows):
 
 
 if __name__ == '__main__':
-    def _initial_caps():
+    def _initial_caps(host='localhost'):
         from sys import argv
         import gnomekeyring as gk
         from sqlalchemy import create_engine
 
-        def open_read(n):
-            return open(n)
+        def open_arg(ix):
+            return open(argv[ix])
+
+        def engine_arg(ix):
+            db = argv[ix]
+            findcreds = findMaker(gk.find_network_password_sync)
+            log.info('getting keyring info for %s', db)
+            creds = findcreds(db)
+            return create_engine(
+                URL(drivername='mysql', host=host, database=db,
+                    username=creds['user'],
+                    password=creds['password']))
 
         return dict(argv=argv,
-                    find_network_password_sync=gk.find_network_password_sync,
-                    create_engine=create_engine,
-                    open_read=open_read)
+                    open_arg=open_arg,
+                    engine_arg=engine_arg)
 
     main(**_initial_caps())
