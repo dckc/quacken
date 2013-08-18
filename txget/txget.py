@@ -1,34 +1,33 @@
 
 import ConfigParser
 import logging
+from datetime import timedelta
 
-from selenium import webdriver
 from selenium.webdriver.support import wait
 from selenium.webdriver.support.ui import Select
 
 log = logging.getLogger(__name__)
 
 
-def main(argv):
-    import datetime
-
+def main(argv, open_arg, make_driver, calendar, clock):
     logging.basicConfig(level=logging.INFO)
 
     config_fn = argv[1]
     config = ConfigParser.SafeConfigParser()
-    config.read(config_fn)
+    config.readfp(open_arg(config_fn), config_fn)
 
-    browser = webdriver.Chrome()
+    browser = make_driver()
     for section in argv[2:]:
-        site = AcctSite(browser, datetime.date)
+        site = AcctSite(browser, calendar, clock)
         ofx = site.txget(config, section)
         log.info('OFX from %s: %s', section, ofx)
 
 
 class AcctSite(object):
-    def __init__(self, ua, cal):
+    def __init__(self, ua, cal, clock):
         self.__ua = ua
         self._cal = cal
+        self._clock = clock
 
     def txget(self, conf, section):
         self.login(conf.get(section, 'home'),
@@ -38,37 +37,45 @@ class AcctSite(object):
             section = conf.get(section, 'next')
             if conf.has_option(section, 'link'):
                 self.follow_link(conf.get(section, 'link'))
-            if conf.has_option(section, 'submit'):
-                self.form_fill(conf, section, conf.get(section, 'submit'))
+            if conf.has_option(section, 'form'):
+                self.form_fill(conf, section)
             if conf.has_option(section, 'ofx'):
                 return conf.get(section, 'ofx')
 
         raise ValueError('no ofx option in any section')
 
-    def login(self, home, logged_in):
+    def login(self, home, logged_in,
+              wait_time=60, poll_period=3):
         log.info('opening home: %s', home)
         self.__ua.get(home)
         log.debug('opened')
-        wt = wait.WebDriverWait(self.__ua, 60, 3)
+        wt = wait.WebDriverWait(self.__ua, wait_time, poll_period)
 
         def login_text_found(ua):
             return ua.find_element_by_xpath(
                 "//div[contains(normalize-space(.), '%s')]" % logged_in)
 
-        log.info('Waiting for user to log in...')
+        log.info("Waiting 'till %s for user to log in...",
+                 self._clock.now() + timedelta(seconds=wait_time))
         wt.until(login_text_found)
 
-    def follow_link(self, which):
-        if which.startswith('"'):
-            e = self.__ua.find_element_by_xpath(
+    def follow_link(self, which, timeout=10):
+        def by_xpath(ua):
+            return ua.find_element_by_xpath(
                 '//a[%s]' % which[1:-1])
-        else:
-            e = self.__ua.find_element_by_link_text(which)
+
+        def by_text(ua):
+            return ua.find_element_by_link_text(which)
+
+        wt = wait.WebDriverWait(self.__ua, timeout)
+        e = wt.until(by_xpath if which.startswith('"') else by_text)
         e.click()
 
-    def form_fill(self, conf, section, submit):
+    def form_fill(self, conf, section):
         f = self.__ua.find_element_by_xpath(
             conf.get(section, 'form')[1:-1])
+
+        submit = None
 
         for n, v in conf.items(section):
             if n.startswith('select_'):
@@ -86,10 +93,11 @@ class AcctSite(object):
             elif n == 'submit':
                 submit = v
 
-        btn = (f.find_element_by_xpath(submit[1:-1])
-               if submit.startswith('"')
-               else f.find_element_by_name(submit))
-        btn.click()
+        if submit:
+            btn = (f.find_element_by_xpath(submit[1:-1])
+                   if submit.startswith('"')
+                   else f.find_element_by_name(submit))
+            btn.click()
 
 
 def select_option(f, name, idx):
@@ -114,5 +122,19 @@ def set_text(f, name, value):
 
 
 if __name__ == '__main__':
-    import sys
-    main(sys.argv)
+    def _initial_caps():
+        from sys import argv
+        import datetime
+
+        from selenium import webdriver
+
+        def open_arg(path):
+            if path not in argv:
+                raise IOError('not authorized CLI arg: %s' % path)
+            return open(path)
+
+        return dict(argv=argv[:], open_arg=open_arg,
+                    calendar=datetime, clock=datetime.datetime,
+                    make_driver=webdriver.Chrome)
+
+    main(**_initial_caps())
