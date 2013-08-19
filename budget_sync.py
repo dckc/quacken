@@ -243,7 +243,7 @@ where a.guid is null
       and gdb.account_type = gcb.account_type
     '''
 
-    def compare_by_acct_type(self, budget_name='2013 Q2'):
+    def compare_by_acct_type(self, budget_name='2013 Q3'):
         conn = self._engine.connect()
         ans = conn.execute(self.acct_type_q, budget_name=budget_name)
         return ans.fetchall()
@@ -272,9 +272,9 @@ where a.guid is null
       and gdb.parent = gcb.parent
     '''
 
-    def compare_subtots(self):
+    def compare_subtots(self, budget_name='2013 Q3'):
         conn = self._engine.connect()
-        ans = conn.execute(self.subtot_q, budget_name='2013 Q2')
+        ans = conn.execute(self.subtot_q, budget_name=budget_name)
         return ans.fetchall()
 
     def sync_items(self):
