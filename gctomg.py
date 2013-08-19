@@ -1,4 +1,6 @@
 '''gctomg -- convert GnuCash to moneyGuru
+
+ref http://wiki.gnucash.org/wiki/SQL
 '''
 
 import logging
