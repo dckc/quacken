@@ -1,4 +1,38 @@
+select b.name budget_name, a.account_type, p.name parent,
+    sum(amount_num / 100.0) subtot
+    from budgets b
+    join budget_amounts ba on ba.budget_guid = b.guid
+    join accounts a on a.guid = ba.account_guid
+    join accounts p on a.parent_guid = p.guid
+    where b.name in ('2013 Q2')
+    group by b.name, a.account_type, p.name
+    ;
+select b.name budget_name, a.account_type, p.name parent, a.name,
+    ba.amount_num / ba.amount_denom
+    from budgets b
+    join budget_amounts ba on ba.budget_guid = b.guid
+    join accounts a on a.guid = ba.account_guid
+    join accounts p on a.parent_guid = p.guid
+    where b.name in ('2013 Q2')
+    order by budget_name, a.account_type, p.name, a.name
+;
+
+select * from gdocs_budget;
+    
 SET sql_safe_updates=0;
+
+-- see also budget_sync.py
+create table budget_import (
+budget_name varchar(80),
+t_log varchar(20),
+account_type varchar(60),
+code varchar(40),
+parent varchar(80),
+name varchar(80),
+budget varchar(20),
+notes varchar(200)
+);
+
 delete from budget_import;
 
 load data infile '/home/connolly/qtrx/dm93finance/monthly-budget - 2003 H1.csv'
@@ -8,6 +42,8 @@ OPTIONALLY ENCLOSED BY '"'
 ESCAPED BY '"'
 LINES TERMINATED BY '\n'
 IGNORE 1 LINES;
+
+select * from budget_import;
 
 
 select * -- distinct bi.t_lo, bi.code, bi.name
@@ -118,7 +154,7 @@ select sum(amount), account_type from (
 select budget_name, t_lo, account_type, code, parent, name,
 case when account_type = 'EXPENSE' then -budget
 else budget end amount from budget_accts
-where budget_name in ('2012 Q2')
+where budget_name in ('2013 Q2')
 -- and recurrence_period_type = 'month'
 order by code, t_lo, name
 ) t2
@@ -295,7 +331,15 @@ where b.name='2012 H1';
 
 delete b from budgets b where b.name='2012 H1';
 
-select * from gdocs_budget;
+select * from gdocs_budget
+where parent = 'EB';
+
+select budget_name, account_type, parent, sum(amount_num / 100.0) subtot
+from gdocs_budget bi
+where bi.code > ''
+  and budget_name in ('2013 Q2')
+group by budget_name, account_type, parent
+;
 
 drop table if exists budget_decisions;
 create table budget_decisions as
@@ -502,4 +546,8 @@ order by post_date desc, tx_guid
 select sd.* from split_detail sd
 where timestampdiff(day, sd.post_date, current_timestamp) < 120
 order by post_date desc, tx_guid
+;
+
+create or replace
+VIEW `split_detail` AS select `tx`.`post_date` AS `post_date`,`tx`.`description` AS `description`,(`s`.`value_num` / `s`.`value_denom`) AS `amount`,`s`.`memo` AS `memo`,`a`.`code` AS `code`,`a`.`path` AS `path`,coalesce(`slots`.`string_val`,'') AS `online_id`,`s`.`guid` AS `guid`,`tx`.`guid` AS `tx_guid` from (((`transactions` `tx` join `splits` `s` on((`s`.`tx_guid` = `tx`.`guid`))) join `acct_ancestors` `a` on((`s`.`account_guid` = `a`.`a0guid`))) left join `slots` on(((`slots`.`obj_guid` = `s`.`guid`) and (`slots`.`name` = 'online_id'))))
 ;
