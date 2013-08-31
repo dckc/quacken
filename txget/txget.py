@@ -121,6 +121,22 @@ def set_text(f, name, value):
     field.send_keys(value)
 
 
+def make_use_chromium(Chrome,
+                      path='/usr/lib/chromium-browser/chromium-browser'):
+    '''Use Chromium to work around problems with Chrom 29.
+
+    to wit:
+    Unknown command 'WaitForAllTabsToStopLoading'
+    cf. https://bitbucket.org/DanC/quacken/issue/1/unknown-command
+    '''
+    def use_chromium():
+        from selenium.webdriver.chrome.options import Options
+        use_chromium = Options()
+        use_chromium.binary_location = path
+        return Chrome(chrome_options=use_chromium)
+    return use_chromium
+
+
 if __name__ == '__main__':
     def _initial_caps():
         from sys import argv
@@ -135,6 +151,6 @@ if __name__ == '__main__':
 
         return dict(argv=argv[:], open_arg=open_arg,
                     calendar=datetime, clock=datetime.datetime,
-                    make_driver=webdriver.Chrome)
+                    make_driver=make_use_chromium(webdriver.Chrome))
 
     main(**_initial_caps())
