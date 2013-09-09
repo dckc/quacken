@@ -86,6 +86,7 @@ AccountMatchUpdate = text('''
          case a.account_type
            when 'INCOME' then 1
            when 'EXPENSE' then 1
+           when 'ASSET' then -1
            when 'LIABILITY' then -1
            else 1/0
          end,
@@ -151,6 +152,7 @@ class Budget(object):
         conn.execute(BudgetMatchUpdate)
         conn.execute(BudgetTypeUpdate)
         conn.execute(BudgetPeriodUpdate)
+        conn.execute(AccountMatchUpdate)
 
     def sync_accounts(self, dry_run=True):
         conn = self._engine.connect()
