@@ -1,8 +1,12 @@
 
+from datetime import date, datetime, timedelta
+from functools import partial as pf_
 import ConfigParser
 import logging
-from datetime import timedelta
 
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.remote.webdriver import WebDriver
+from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import wait
 from selenium.webdriver.support.ui import Select
 
@@ -10,6 +14,13 @@ log = logging.getLogger(__name__)
 
 
 def main(argv, open_arg, make_driver, calendar, clock):
+    '''
+    :type argv: IndexedSeq[String]
+    :type open_arg: String => File
+    :type make_driver: () => WebDriver
+    :type calendar: { def today(): date }
+    :type clock: { def now(): datetime }
+    '''
     logging.basicConfig(level=logging.INFO)
 
     config_fn = argv[1]
@@ -23,13 +34,36 @@ def main(argv, open_arg, make_driver, calendar, clock):
         log.info('OFX from %s: %s', section, ofx)
 
 
+def _imports_are_not_unused(x):
+    ''':type x: Object'''
+    isinstance(x, date)
+    isinstance(x, datetime)
+
+    class X(WebDriver):
+        pass
+
+    class Y(WebElement):
+        pass
+
+
 class AcctSite(object):
     def __init__(self, ua, cal, clock):
+        '''
+        :type ua: WebDriver
+        :type cal: { def today(): date }
+        :type clock: { def now(): datetime }
+
+        '''
         self.__ua = ua
         self._cal = cal
         self._clock = clock
 
     def txget(self, conf, section):
+        '''
+        :type conf: ConfigParser.ConfigParser
+        :type section: String
+        :rtype: String
+        '''
         self.login(conf.get(section, 'home'),
                    conf.get(section, 'logged_in'))
 
@@ -46,12 +80,23 @@ class AcctSite(object):
 
     def login(self, home, logged_in,
               wait_time=60, poll_period=3):
+        '''
+        :param home: home page URL
+        :type home: String
+        :param logged_in: text that signals log in is complete
+        :type logged_in: String
+
+        TODO: infer types from default int, string args
+        :type wait_time: Int
+        :type poll_period: Int
+        '''
         log.info('opening home: %s', home)
         self.__ua.get(home)
         log.debug('opened')
         wt = wait.WebDriverWait(self.__ua, wait_time, poll_period)
 
         def login_text_found(ua):
+            ''':type ua: WebDriver'''
             return ua.find_element_by_xpath(
                 "//div[contains(normalize-space(.), '%s')]" % logged_in)
 
@@ -60,11 +105,17 @@ class AcctSite(object):
         wt.until(login_text_found)
 
     def follow_link(self, which, timeout=10):
+        '''
+        :type which: String
+        :type timeout: Int
+        '''
         def by_xpath(ua):
+            ''':type ua: WebDriver'''
             return ua.find_element_by_xpath(
                 '//a[%s]' % which[1:-1])
 
         def by_text(ua):
+            ''':type ua: WebDriver'''
             return ua.find_element_by_link_text(which)
 
         wt = wait.WebDriverWait(self.__ua, timeout)
@@ -72,6 +123,10 @@ class AcctSite(object):
         e.click()
 
     def form_fill(self, conf, section):
+        '''
+        :type conf: ConfigParser.ConfigParser
+        :type section: String
+        '''
         f = self.__ua.find_element_by_xpath(
             conf.get(section, 'form')[1:-1])
 
@@ -101,11 +156,21 @@ class AcctSite(object):
 
 
 def select_option(f, name, idx):
+    '''
+    :type f: WebElement
+    :type name: String
+    :type idx: Int
+    '''
     sel = Select(f.find_element_by_name(name))
     sel.select_by_index(idx)
 
 
 def set_radio(f, name, value):
+    '''
+    :type f: WebElement
+    :type name: String
+    :type value: String
+    '''
     val_constraint = (("and @id='%s'" % value[3:])
                       if value.startswith('id=') else
                       ("and @value='%s'" % value))
@@ -116,41 +181,49 @@ def set_radio(f, name, value):
 
 
 def set_text(f, name, value):
+    '''
+    :type f: WebElement
+    :type name: String
+    :type value: String
+    '''
     field = f.find_element_by_name(name)
     field.clear()
     field.send_keys(value)
 
 
-def make_use_chromium(Chrome,
+def make_use_chromium(mk_chrome,
                       path='/usr/lib/chromium-browser/chromium-browser'):
-    '''Use Chromium to work around problems with Chrom 29.
+    '''Use Chromium to work around problems with Chrome 29.
 
     to wit:
     Unknown command 'WaitForAllTabsToStopLoading'
     cf. https://bitbucket.org/DanC/quacken/issue/1/unknown-command
+
+    :type mk_chrome: Options => WebDriver
+    :type path: String
     '''
     def use_chromium():
-        from selenium.webdriver.chrome.options import Options
         use_chromium = Options()
         use_chromium.binary_location = path
-        return Chrome(chrome_options=use_chromium)
-    return use_chromium
+        return mk_chrome(chrome_options=use_chromium)
+    return pf_(use_chromium)
 
 
 if __name__ == '__main__':
-    def _initial_caps():
+    def _main_with_caps():
         from sys import argv
         import datetime
 
         from selenium import webdriver
 
         def open_arg(path):
+            ''':type path: String'''
             if path not in argv:
                 raise IOError('not authorized CLI arg: %s' % path)
             return open(path)
 
-        return dict(argv=argv[:], open_arg=open_arg,
-                    calendar=datetime, clock=datetime.datetime,
+        return main(argv=argv[:], open_arg=open_arg,
+                    calendar=datetime.date, clock=datetime.datetime,
                     make_driver=make_use_chromium(webdriver.Chrome))
 
-    main(**_initial_caps())
+    _main_with_caps()
