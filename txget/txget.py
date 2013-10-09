@@ -1,6 +1,7 @@
 
 from datetime import date, datetime, timedelta
 from functools import partial as pf_
+from functools import partial as classOf  # TODO: use fp.classOf?
 import ConfigParser
 import logging
 
@@ -36,14 +37,11 @@ def main(argv, open_arg, make_driver, calendar, clock):
 
 def _imports_are_not_unused(x):
     ''':type x: Object'''
-    isinstance(x, date)
-    isinstance(x, datetime)
+    date(2000, 1, 1)
+    datetime(2000, 1, 1, 12, 30, 30)
 
-    class X(WebDriver):
-        pass
-
-    class Y(WebElement):
-        pass
+    isinstance(x, classOf(WebDriver))
+    isinstance(x, classOf(WebElement))
 
 
 class AcctSite(object):
@@ -130,7 +128,7 @@ class AcctSite(object):
         f = self.__ua.find_element_by_xpath(
             conf.get(section, 'form')[1:-1])
 
-        submit = None
+        submit = ""
 
         for n, v in conf.items(section):
             if n.startswith('select_'):
@@ -205,8 +203,13 @@ def make_use_chromium(mk_chrome,
     def use_chromium():
         use_chromium = Options()
         use_chromium.binary_location = path
-        return mk_chrome(chrome_options=use_chromium)
+        return mk_chrome(use_chromium)
     return pf_(use_chromium)
+
+
+def typed(x, t):
+    # TODO: use fp.typed?
+    return x
 
 
 if __name__ == '__main__':
@@ -214,7 +217,7 @@ if __name__ == '__main__':
         from sys import argv
         import datetime
 
-        from selenium import webdriver
+        from selenium.webdriver import Chrome
 
         def open_arg(path):
             ''':type path: String'''
@@ -222,8 +225,12 @@ if __name__ == '__main__':
                 raise IOError('not authorized CLI arg: %s' % path)
             return open(path)
 
+        def mk_chrome(options):
+            ''':type options: Options'''
+            return Chrome(chrome_options=options)
+
         return main(argv=argv[:], open_arg=open_arg,
                     calendar=datetime.date, clock=datetime.datetime,
-                    make_driver=make_use_chromium(webdriver.Chrome))
+                    make_driver=make_use_chromium(pf_(mk_chrome)))
 
     _main_with_caps()
