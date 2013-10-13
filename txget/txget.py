@@ -8,8 +8,7 @@ import logging
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.remote.webelement import WebElement
-from selenium.webdriver.support import wait
-from selenium.webdriver.support.ui import Select
+from selenium.webdriver import support
 
 log = logging.getLogger(__name__)
 
@@ -91,7 +90,7 @@ class AcctSite(object):
         log.info('opening home: %s', home)
         self.__ua.get(home)
         log.debug('opened')
-        wt = wait.WebDriverWait(self.__ua, wait_time, poll_period)
+        wt = support.wait.WebDriverWait(self.__ua, wait_time, poll_period)
 
         def login_text_found(ua):
             ''':type ua: WebDriver'''
@@ -116,7 +115,7 @@ class AcctSite(object):
             ''':type ua: WebDriver'''
             return ua.find_element_by_link_text(which)
 
-        wt = wait.WebDriverWait(self.__ua, timeout)
+        wt = support.wait.WebDriverWait(self.__ua, timeout)
         e = wt.until(by_xpath if which.startswith('"') else by_text)
         e.click()
 
@@ -130,15 +129,17 @@ class AcctSite(object):
 
         submit = ""
 
+        n, v = var(String=""), var(String="")
+
         for n, v in conf.items(section):
             if n.startswith('select_'):
-                name, idx = v.split(' ', 1)
+                name, idx = n_v(v)
                 select_option(f, name, int(idx))
             if n.startswith('radio_'):
-                name, value = v.split(' ', 1)
+                name, value = n_v(v)
                 set_radio(f, name, value)
             elif n.startswith('text_'):
-                name, value = v.split(' ', 1)
+                name, value = n_v(v)
                 set_text(f, name, value)
             elif n == 'today':
                 mdy = self._cal.today().strftime("%02m/%02d/%Y")
@@ -159,7 +160,7 @@ def select_option(f, name, idx):
     :type name: String
     :type idx: Int
     '''
-    sel = Select(f.find_element_by_name(name))
+    sel = support.ui.Select(f.find_element_by_name(name))
     sel.select_by_index(idx)
 
 
@@ -210,6 +211,19 @@ def make_use_chromium(mk_chrome,
 def typed(x, t):
     # TODO: use fp.typed?
     return x
+
+
+def var(String="", Int=0, Boolean=False, t=None, v=None):
+    # TODO: move to fp.var
+    pass
+
+
+def n_v(s):
+    '''
+    :type s: String
+    '''
+    l = s.split(' ', 1)
+    return l[0], l[1]
 
 
 if __name__ == '__main__':
