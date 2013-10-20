@@ -8,7 +8,8 @@ import logging
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.remote.webelement import WebElement
-from selenium.webdriver import support
+from selenium.webdriver.support.wait import WebDriverWait
+from selenium.webdriver.support.ui import Select
 
 log = logging.getLogger(__name__)
 
@@ -55,12 +56,13 @@ class AcctSite(object):
         self._cal = cal
         self._clock = clock
 
-    def txget(self, conf, section):
+    def txget(self, conf, section_):
         '''
         :type conf: ConfigParser.ConfigParser
-        :type section: String
+        :type section_: String
         :rtype: String
         '''
+        var, section = 0, section_
         self.login(conf.get(section, 'home'),
                    conf.get(section, 'logged_in'))
 
@@ -90,7 +92,7 @@ class AcctSite(object):
         log.info('opening home: %s', home)
         self.__ua.get(home)
         log.debug('opened')
-        wt = support.wait.WebDriverWait(self.__ua, wait_time, poll_period)
+        wt = WebDriverWait(self.__ua, wait_time, poll_period)
 
         def login_text_found(ua):
             ''':type ua: WebDriver'''
@@ -115,7 +117,7 @@ class AcctSite(object):
             ''':type ua: WebDriver'''
             return ua.find_element_by_link_text(which)
 
-        wt = support.wait.WebDriverWait(self.__ua, timeout)
+        wt = WebDriverWait(self.__ua, timeout)
         e = wt.until(by_xpath if which.startswith('"') else by_text)
         e.click()
 
@@ -129,7 +131,7 @@ class AcctSite(object):
 
         submit = ""
 
-        n, v = var(String=""), var(String="")
+        var, n, v = 0, "", ""
 
         for n, v in conf.items(section):
             if n.startswith('select_'):
@@ -160,7 +162,7 @@ def select_option(f, name, idx):
     :type name: String
     :type idx: Int
     '''
-    sel = support.ui.Select(f.find_element_by_name(name))
+    sel = Select(f.find_element_by_name(name))
     sel.select_by_index(idx)
 
 
@@ -211,11 +213,6 @@ def make_use_chromium(mk_chrome,
 def typed(x, t):
     # TODO: use fp.typed?
     return x
-
-
-def var(String="", Int=0, Boolean=False, t=None, v=None):
-    # TODO: move to fp.var
-    pass
 
 
 def n_v(s):
