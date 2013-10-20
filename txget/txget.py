@@ -68,6 +68,7 @@ class AcctSite(object):
 
         while conf.has_option(section, 'next'):
             section = conf.get(section, 'next')
+            log.info('on to section: %s', section)
             if conf.has_option(section, 'link'):
                 self.follow_link(conf.get(section, 'link'))
             if conf.has_option(section, 'form'):
@@ -102,6 +103,7 @@ class AcctSite(object):
         log.info("Waiting 'till %s for user to log in...",
                  self._clock.now() + timedelta(seconds=wait_time))
         wt.until(login_text_found)
+        log.info('Logged in (%s).', logged_in)
 
     def follow_link(self, which, timeout=10):
         '''
