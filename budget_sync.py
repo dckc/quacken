@@ -22,9 +22,9 @@ def main(argv, open_arg, engine_arg,
     logging.basicConfig(level=level)
     logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 
-    gdoc_budget, engine = open_arg(1), engine_arg(2)
+    gdoc_budget, engine, budget_name = open_arg(1), engine_arg(2), argv[3]
 
-    budget = Budget(engine)
+    budget = Budget(engine, budget_name)
     if '--by-parent' in argv:
         log.info('subtots:\n%s', pformat(budget.compare_subtots()))
     elif '--by-type' in argv:
@@ -133,8 +133,9 @@ BudgetPeriodUpdate = text('''
 
 
 class Budget(object):
-    def __init__(self, engine):
+    def __init__(self, engine, name):
         self._engine = engine
+        self._name = name
 
     def _prepare(self):
         log.info('dropping and creating %s',
@@ -146,7 +147,8 @@ class Budget(object):
         self._prepare()
         conn = self._engine.connect()
         sheet = csv.DictReader(infp)
-        rows = list(sheet)
+        rows = [row for row in sheet
+                if row['budget_name'] == self._name]
         log.info('inserting %d rows into %s', len(rows), BudgetItem)
         conn.execute(BudgetItem.insert(), rows)
         conn.execute(BudgetMatchUpdate)
@@ -245,9 +247,9 @@ where a.guid is null
       and gdb.account_type = gcb.account_type
     '''
 
-    def compare_by_acct_type(self, budget_name='2013 Q3'):
+    def compare_by_acct_type(self):
         conn = self._engine.connect()
-        ans = conn.execute(self.acct_type_q, budget_name=budget_name)
+        ans = conn.execute(self.acct_type_q, budget_name=self._name)
         return ans.fetchall()
 
     subtot_q = '''select gcb.*, gdb.subtot,
@@ -274,9 +276,9 @@ where a.guid is null
       and gdb.parent = gcb.parent
     '''
 
-    def compare_subtots(self, budget_name='2013 Q3'):
+    def compare_subtots(self):
         conn = self._engine.connect()
-        ans = conn.execute(self.subtot_q, budget_name=budget_name)
+        ans = conn.execute(self.subtot_q, budget_name=self._name)
         return ans.fetchall()
 
     def sync_items(self):
