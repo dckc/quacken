@@ -27,24 +27,22 @@ import os
 from setuptools import setup, find_packages
 
 here = os.path.abspath(os.path.dirname(__file__))
-README = __doc__ # TODO: open(os.path.join(here, 'README.rst')).read()
+README = __doc__  # TODO: open(os.path.join(here, 'README.rst')).read()
 CHANGES = ''  # TODO: open(os.path.join(here, 'CHANGES.txt')).read()
 
 requires = [
-    'selenium',
-    ]
+    'selenium']
 
 setup(name='txget',
       version='0.1',
       description='txget',
-      long_description=README + '\n\n' +  CHANGES,
+      long_description=README + '\n\n' + CHANGES,
       classifiers=[
-        "Programming Language :: Python",
-        "Topic :: Internet :: WWW/HTTP",
-        "Topic :: Office/Business :: Financial :: Accounting",
-        "License :: OSI Approved",
-        "License :: OSI Approved :: Apache Software License",
-        ],
+          "Programming Language :: Python",
+          "Topic :: Internet :: WWW/HTTP",
+          "Topic :: Office/Business :: Financial :: Accounting",
+          "License :: OSI Approved",
+          "License :: OSI Approved :: Apache Software License"],
       author='Dan Connolly',
       author_email='dckc@madmode.com',
       url='http://www.madmode.com/',
@@ -55,6 +53,3 @@ setup(name='txget',
       test_suite='txget',
       install_requires=requires,
       )
-
-
-
