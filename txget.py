@@ -1,5 +1,10 @@
 '''Partially automate getting transactions from bank and credit card web sites.
 
+tested with
+chromedriver_linux64.zip 2014-02-03 09:12:13 2.16MB
+ e2e44f064ecb69ec5b6f1b80f3d13c93
+http://chromedriver.storage.googleapis.com/index.html?path=2.9/
+
 '''
 
 import ConfigParser
