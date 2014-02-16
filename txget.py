@@ -1,26 +1,27 @@
+'''Partially automate getting transactions from bank and credit card web sites.
+
+'''
 
 import ConfigParser
 import logging
 
-from selenium import webdriver
 from selenium.webdriver.support import wait
 from selenium.webdriver.support.ui import Select
 
 log = logging.getLogger(__name__)
 
 
-def main(argv):
-    import datetime
-
-    logging.basicConfig(level=logging.INFO)
-
+def main(argv, open_arg, mkBrowser, cal):
+    '''
+    .. note: We're using least-authority idioms; see also `_with_caps`.
+    '''
     config_fn = argv[1]
     config = ConfigParser.SafeConfigParser()
-    config.read(config_fn)
+    config.readfp(open_arg(config_fn), config_fn)
 
-    browser = webdriver.Chrome()
+    browser = mkBrowser()
     for section in argv[2:]:
-        site = AcctSite(browser, datetime.date)
+        site = AcctSite(browser, cal)
         ofx = site.txget(config, section)
         log.info('OFX from %s: %s', section, ofx)
 
@@ -114,5 +115,24 @@ def set_text(f, name, value):
 
 
 if __name__ == '__main__':
-    import sys
-    main(sys.argv)
+    def _config_logging(level=logging.INFO):
+        logging.basicConfig(level=level)
+
+    def _with_caps():
+        from sys import argv
+        import datetime
+
+        from selenium import webdriver
+
+        def open_arg(n):
+            if n not in argv:
+                raise IOError
+
+            return open(n)
+
+        main(argv, open_arg,
+             cal=datetime.date,
+             mkbrowser=lambda: webdriver.Chrome())
+
+    _config_logging()
+    _with_caps()
