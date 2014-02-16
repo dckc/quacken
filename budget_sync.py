@@ -385,7 +385,7 @@ def format_rows(rows):
 
 
 if __name__ == '__main__':
-    def _initial_caps(host='localhost'):
+    def _with_caps(host='localhost'):
         from sys import argv
         import gnomekeyring as gk
         from sqlalchemy import create_engine
@@ -403,8 +403,8 @@ if __name__ == '__main__':
                     username=creds['user'],
                     password=creds['password']))
 
-        return dict(argv=argv,
+        return main(argv=argv,
                     open_arg=open_arg,
                     engine_arg=engine_arg)
 
-    main(**_initial_caps())
+    _with_caps()
