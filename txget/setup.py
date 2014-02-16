@@ -16,10 +16,9 @@ Getting Started
 http://pypi.python.org/pypi/keyring/0.9.2
 
 tested with:
-
-http://code.google.com/p/chromedriver/downloads/list
-chromedriver_linux64_21.0.1180.4.zip   6.7 MB
-SHA1 Checksum:	 4f8f043f3893ca0969176c8cf4868117b47e3781
+chromedriver_linux64.zip 2014-02-03 09:12:13 2.16MB
+ e2e44f064ecb69ec5b6f1b80f3d13c93
+http://chromedriver.storage.googleapis.com/index.html?path=2.9/
 
 '''
 import os
