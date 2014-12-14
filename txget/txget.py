@@ -222,7 +222,9 @@ if __name__ == '__main__':
         from sys import argv
         import datetime
 
-        from selenium.webdriver import Chrome
+        from selenium.webdriver import Chrome, Remote
+        from selenium.webdriver.common.desired_capabilities import (
+            DesiredCapabilities)
 
         def open_arg(path):
             ''':type path: String'''
@@ -234,8 +236,17 @@ if __name__ == '__main__':
             ''':type options: Options'''
             return Chrome(chrome_options=options)
 
+        def mk_remote_chrome():
+            log.info('driver...')
+            driver = Remote(
+                command_executor='http://127.0.0.1:4444/wd/hub',
+                desired_capabilities=DesiredCapabilities.CHROME)
+            log.info('driver: %s', driver)
+            return driver
+
         return main(argv=argv[:], open_arg=open_arg,
                     calendar=datetime.date, clock=datetime.datetime,
                     make_driver=make_use_chromium(pf_(mk_chrome)))
+#                    make_driver=mk_remote_chrome)
 
     _main_with_caps()
