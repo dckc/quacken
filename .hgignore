@@ -14,3 +14,5 @@ finquick/finquick.egg-info/*
 finquick/finquick.db
 finquick/cover
 txget/txget.egg-info/
+
+node_modules
