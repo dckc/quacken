@@ -95,17 +95,19 @@ class AcctSite(object):
         log.info('opening home: %s', home)
         self.__ua.get(home)
         log.debug('opened')
-        wt = WebDriverWait(self.__ua, wait_time, poll_period)
 
-        def login_text_found(ua):
-            ''':type ua: WebDriver'''
-            return ua.find_element_by_xpath(
-                "//div[contains(normalize-space(.), '%s')]" % logged_in)
+        login_text_finder = (
+            "//div[contains(normalize-space(.), '%s')]" % logged_in)
 
         log.info("Waiting 'till %s for user to log in...",
                  self._clock.now() + timedelta(seconds=wait_time))
-        wt.until(login_text_found)
+        self._wait((By.XPATH, login_text_finder), timeout=wait_time)
         log.info('Logged in (%s).', logged_in)
+
+    def _wait(self, crit,
+              timeout=10):
+        wt = WebDriverWait(self.__ua, timeout)
+        return wt.until(EC.element_to_be_clickable(crit))
 
     def follow_link(self, which, timeout=10):
         '''
@@ -115,18 +117,17 @@ class AcctSite(object):
         crit = ((By.XPATH, '//a[%s]' % which[1:-1])
                 if which.startswith('"') else
                 (By.LINK_TEXT, which))
-
-        wt = WebDriverWait(self.__ua, timeout)
-        e = wt.until(EC.element_to_be_clickable(crit))
+        e = self._wait(crit)
         e.click()
 
-    def form_fill(self, conf, section):
+    def form_fill(self, conf, section,
+                  timeout=10):
         '''
         :type conf: ConfigParser.ConfigParser
         :type section: String
         '''
-        f = self.__ua.find_element_by_xpath(
-            conf.get(section, 'form')[1:-1])
+        xpath = conf.get(section, 'form')[1:-1]
+        f = self._wait((By.XPATH, xpath))
 
         submit = ""
 
@@ -135,61 +136,60 @@ class AcctSite(object):
         for n, v in conf.items(section):
             if n.startswith('select_'):
                 [name, idx] = v.split(' ', 1)
-                select_option(f, name, int(idx))
+                self.select_option(f, name, int(idx))
             if n.startswith('radio_'):
                 [name, value] = v.split(' ', 1)
-                set_radio(f, name, value)
+                self.set_radio(f, name, value)
             elif n.startswith('text_'):
                 [name, value] = v.split(' ', 1)
-                set_text(f, name, value)
+                self.set_text(f, name, value)
             elif n == 'today':
                 mdy = self._cal.today().strftime("%02m/%02d/%Y")
-                set_text(f, v, mdy)
+                self.set_text(f, v, mdy)
             elif n == 'submit':
                 submit = v
 
         if submit:
-            btn = (f.find_element_by_xpath(submit[1:-1])
-                   if submit.startswith('"')
-                   else f.find_element_by_name(submit))
+            crit = ((By.XPATH, submit[1:-1])
+                    if submit.startswith('"')
+                    else (By.NAME, submit))
+            btn = self._wait(crit)
             btn.click()
 
+    def select_option(self, f, name, idx):
+        '''
+        :param WebElement f: form element
+        :param String name: name of selection input
+        :param Int idx: 0-based index of option to select
+        '''
+        elt = self._wait((By.NAME, name))
+        Select(elt).select_by_index(idx)
 
-def select_option(f, name, idx):
-    '''
-    :type f: WebElement
-    :type name: String
-    :type idx: Int
-    '''
-    sel = Select(f.find_element_by_name(name))
-    sel.select_by_index(idx)
+    def set_radio(self, f, name, value):
+        '''
+        :param WebElement f: form element
+        :param String name: name of radio input
+        :type value: String
+        '''
+        val_constraint = (("and @id='%s'" % value[3:])
+                          if value.startswith('id=') else
+                          ("and @value='%s'" % value))
+        radio = f.find_element_by_xpath(
+            ".//input[@type='radio' and @name='%s' %s]" % (
+                name, val_constraint))
+        radio.click()
 
-
-def set_radio(f, name, value):
-    '''
-    :type f: WebElement
-    :type name: String
-    :type value: String
-    '''
-    val_constraint = (("and @id='%s'" % value[3:])
-                      if value.startswith('id=') else
-                      ("and @value='%s'" % value))
-    radio = f.find_element_by_xpath(
-        ".//input[@type='radio' and @name='%s' %s]" % (
-            name, val_constraint))
-    radio.click()
-
-
-def set_text(f, name, value):
-    '''
-    :param WebElement f: form element in which to find text input
-    :type name: String
-    :type value: String
-    '''
-    field = f.find_element_by_name(name)
-    field.clear()
-    field.send_keys(value)
-    field.send_keys('')  # ESC out of the field; e.g. dismiss calendar widget
+    def set_text(self, f, name, value):
+        '''
+        :param WebElement f: form element in which to find text input
+        :type name: String
+        :type value: String
+        '''
+        field = self._wait((By.NAME, name))
+        field.clear()
+        field.send_keys(value)
+        # ESC out of the field; e.g. dismiss calendar widget
+        field.send_keys('')
 
 
 def make_use_chromium(mk_chrome,
