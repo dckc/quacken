@@ -160,13 +160,13 @@ class Budget(object):
         conn = self._engine.connect()
 
         q = '''
-select parent, name, count(name) from
+select bi.parent, a.name, count(a.name) from
 (select distinct parent from gdocs_budget
 where code > '' and t_lo > '') bi
 left join accounts a
        on a.name=bi.parent
-group by parent, name
-having count(name) != 1
+group by bi.parent, a.name
+having count(a.name) != 1
 '''
         missing_acct = conn.execute(q).fetchall()
 
