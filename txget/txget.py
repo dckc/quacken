@@ -6,10 +6,12 @@ import ConfigParser
 import logging
 
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.remote.webelement import WebElement
-from selenium.webdriver.support.wait import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select
+from selenium.webdriver.support.wait import WebDriverWait
 
 log = logging.getLogger(__name__)
 
@@ -110,17 +112,12 @@ class AcctSite(object):
         :type which: String
         :type timeout: Int
         '''
-        def by_xpath(ua):
-            ''':type ua: WebDriver'''
-            return ua.find_element_by_xpath(
-                '//a[%s]' % which[1:-1])
-
-        def by_text(ua):
-            ''':type ua: WebDriver'''
-            return ua.find_element_by_link_text(which)
+        crit = ((By.XPATH, '//a[%s]' % which[1:-1])
+                if which.startswith('"') else
+                (By.LINK_TEXT, which))
 
         wt = WebDriverWait(self.__ua, timeout)
-        e = wt.until(by_xpath if which.startswith('"') else by_text)
+        e = wt.until(EC.element_to_be_clickable(crit))
         e.click()
 
     def form_fill(self, conf, section):
@@ -185,13 +182,14 @@ def set_radio(f, name, value):
 
 def set_text(f, name, value):
     '''
-    :type f: WebElement
+    :param WebElement f: form element in which to find text input
     :type name: String
     :type value: String
     '''
     field = f.find_element_by_name(name)
     field.clear()
     field.send_keys(value)
+    field.send_keys('')  # ESC out of the field; e.g. dismiss calendar widget
 
 
 def make_use_chromium(mk_chrome,
