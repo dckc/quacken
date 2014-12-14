@@ -137,13 +137,13 @@ class AcctSite(object):
 
         for n, v in conf.items(section):
             if n.startswith('select_'):
-                name, idx = n_v(v)
+                [name, idx] = v.split(' ', 1)
                 select_option(f, name, int(idx))
             if n.startswith('radio_'):
-                name, value = n_v(v)
+                [name, value] = v.split(' ', 1)
                 set_radio(f, name, value)
             elif n.startswith('text_'):
-                name, value = n_v(v)
+                [name, value] = v.split(' ', 1)
                 set_text(f, name, value)
             elif n == 'today':
                 mdy = self._cal.today().strftime("%02m/%02d/%Y")
@@ -215,14 +215,6 @@ def make_use_chromium(mk_chrome,
 def typed(x, t):
     # TODO: use fp.typed?
     return x
-
-
-def n_v(s):
-    '''
-    :type s: String
-    '''
-    l = s.split(' ', 1)
-    return l[0], l[1]
 
 
 if __name__ == '__main__':
