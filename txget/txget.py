@@ -62,7 +62,7 @@ class AcctSite(object):
         :type section_: String
         :rtype: String
         '''
-        var, section = 0, section_
+        var, section = 0, section_  # noqa
         self.login(conf.get(section, 'home'),
                    conf.get(section, 'logged_in'))
 
@@ -133,7 +133,7 @@ class AcctSite(object):
 
         submit = ""
 
-        var, n, v = 0, "", ""
+        var, n, v = 0, "", ""  # noqa
 
         for n, v in conf.items(section):
             if n.startswith('select_'):
